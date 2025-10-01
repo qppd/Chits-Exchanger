@@ -1049,23 +1049,79 @@ Edit configuration in `ChitExchanger.ino`:
 
 #### Raspberry Pi Configuration
 Edit `config.json`:
-```json
-{
-  "camera": {
-    "resolution": [1920, 1080],
-    "fps": 30,
-    "device_id": 0
-  },
-  "ai": {
-    "model_path": "ai_detection/models/yolov11_chit.pt",
-    "confidence_threshold": 0.85,
-    "nms_threshold": 0.4
-  },
-  "allan_hoppers": {
-    "1_peso": "/dev/ttyUSB0",
-    "5_peso": "/dev/ttyUSB1",
-    "10_peso": "/dev/ttyUSB2",
-    "20_peso": "/dev/ttyUSB3"
+```
+
+#### Raspberry Pi YOLO Codebase (source/rpi/yolo)
+
+```
+source/rpi/yolo/
+├── requirements.txt         # Python dependencies for YOLO and hardware
+├── yolo11n.pt               # YOLOv11 model weights (pretrained or custom)
+├── .gitignore               # Ignore venv and environment files
+├── runs/
+│   └── detect/
+│       └── predict/
+│           ├── bus.jpg      # Example prediction output
+│           └── zidane.jpg   # Example prediction output
+```
+
+##### Directory Overview
+- **requirements.txt**: Comprehensive list of all Python packages required for running YOLO-based chit detection, hardware control, and auxiliary utilities. Includes AI/ML, image processing, hardware, and system packages.
+- **yolo11n.pt**: YOLOv11 model weights file. This is either a pre-trained model or a custom-trained chit detection model. Place your best model here for inference.
+- **runs/detect/predict/**: Stores output images from YOLO predictions, useful for validation and debugging.
+- **.gitignore**: Ensures virtual environments and sensitive files are not tracked.
+
+##### Key Dependencies (from requirements.txt)
+- **ultralytics**, **torch**, **torchvision**: Core AI/ML libraries for YOLOv11.
+- **opencv-python**, **numpy**, **Pillow**: Image processing and manipulation.
+- **RPi.GPIO**, **pyserial**, **picamera2**: Hardware and camera control for Raspberry Pi.
+- **PyQt5**, **pyqtgraph**: GUI and visualization (if used).
+- **flask**, **requests**, **paho-mqtt**: Communication and web server utilities.
+- **sqlite3**, **sqlalchemy**: Local database and ORM support.
+- **psutil**, **python-dotenv**, **schedule**: System monitoring and configuration.
+
+##### Usage Instructions
+1. **Install Python Dependencies**
+    ```bash
+    cd source/rpi/yolo
+    python3 -m venv venv
+    source venv/bin/activate
+    pip install --upgrade pip
+    pip install -r requirements.txt
+    ```
+2. **Model Setup**
+    - Place your trained YOLOv11 model weights as `yolo11n.pt` in this directory.
+    - For custom training, see the AI Model Training section below.
+3. **Running Inference**
+    - Use your YOLOv11 Python scripts to load `yolo11n.pt` and run detection on input images.
+    - Example output images will be saved in `runs/detect/predict/`.
+4. **Testing**
+    - Validate model predictions using sample images (e.g., `bus.jpg`, `zidane.jpg`).
+    - Integrate with hardware control scripts for full system testing.
+
+##### Example YOLOv11 Inference Script
+```python
+from ultralytics import YOLO
+model = YOLO('yolo11n.pt')
+results = model('runs/detect/predict/bus.jpg')
+results.show()
+```
+
+##### Model Training & Customization
+- Prepare your dataset in YOLO format (see AI Model Training section).
+- Use the training script and configuration as described in the main README to train and export your custom chit detection model.
+
+##### Hardware Integration
+- The codebase is designed for seamless integration with Raspberry Pi hardware (camera, GPIO, coin hoppers).
+- Ensure all hardware dependencies in `requirements.txt` are installed and configured.
+
+##### Best Practices
+- Keep your model weights (`yolo11n.pt`) up to date for best accuracy.
+- Regularly test predictions and hardware integration using the provided sample images and scripts.
+- Use virtual environments to avoid dependency conflicts.
+
+##### For More Details
+- Refer to the main README sections on AI Model Training, Hardware Setup, and API Reference for advanced usage, troubleshooting, and customization.
   },
   "servo": {
     "gpio_pin": 18,
