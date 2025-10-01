@@ -13,18 +13,38 @@ The IoT Chits Exchanger is a smart system designed to automate the process of ex
 - **Integration with Arduino Libraries**: Utilizes libraries like Adafruit PWM Servo Driver and LiquidCrystal_I2C for efficient hardware control.
 
 ## Hardware Components
-- **ESP32 Microcontroller**: The brain of the system, responsible for controlling all peripherals.
-- **Coin Slot**: Detects and processes coin inputs.
-- **Bill Acceptor**: Detects and processes bill inputs.
-- **Servo Motor**: Dispenses chits.
-- **PCA9685 Driver**: Controls the servo motor.
-- **20x4 I2C LCD**: Displays messages and instructions.
-- **Tactile Buttons**: Allows user interaction.
-- **Coin Hopper**: Dispenses coins based on user input.
-- **Power Supply**: Provides power to all components.
-- **Wires and Connectors**: For connecting all components securely.
-- **Resistors and Capacitors**: For signal conditioning and stability.
-- **Piezo Buzzer**: Provides audio feedback for user actions and system events.
+
+**ESP32 Microcontroller**: The brain of the system, responsible for controlling all peripherals.
+**Coin Slot**: Detects and processes coin inputs.
+**Bill Acceptor**: Detects and processes bill inputs.
+**Servo Motor**: Dispenses chits.
+**PCA9685 Driver**: Controls the servo motor.
+**20x4 I2C LCD**: Displays messages and instructions.
+**Tactile Buttons**: Allows user interaction.
+**Coin Hopper**: Dispenses coins based on user input.
+**Power Supply**: Provides power to all components.
+**Wires and Connectors**: For connecting all components securely.
+**Resistors and Capacitors**: For signal conditioning and stability.
+**Piezo Buzzer**: Provides audio feedback for user actions and system events.
+
+### Wiring Diagram
+
+Below is the wiring diagram for the IoT Chits Exchanger. This diagram illustrates the connections between the ESP32 microcontroller and all peripherals, including the coin slot, bill acceptor, servo motor, PCA9685 driver, I2C LCD, tactile buttons, coin hopper, piezo buzzer, and power supply.
+
+![Wiring Diagram](diagram/Peso_Bill_To_Chit.png)
+
+**Key Connections:**
+- **ESP32** controls all peripherals.
+- **Coin Slot** (Pin 27): Detects coin input.
+- **Bill Acceptor** (Pin 26): Detects bill input.
+- **Servo Motor** (via PCA9685, Pins 21/SDA & 22/SCL): Dispenses chits.
+- **I2C LCD** (Pins 21/SDA & 22/SCL): Displays messages.
+- **Tactile Buttons** (Pins 8 & 9): User input.
+- **Coin Hopper Motor** (Pin 10) & Sensor (Pin 11): Dispenses coins.
+- **Piezo Buzzer**: Audio feedback.
+- **Power Supply**: Powers all components.
+
+Refer to the diagram for exact wiring and pin assignments. Ensure all connections match the pin configuration in `PIN_CONFIGURATION.h` for reliable operation.
 
 ## Software Components
 - **Interrupt Service Routines (ISRs)**: Handle real-time events like coin and bill insertion.
