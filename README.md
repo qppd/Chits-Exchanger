@@ -1,3 +1,5 @@
+**LCD Power**: 5V/0.5A for 20x4 I2C LCD
+**Buzzer Power**: 5V/0.1A for piezo buzzer
 # 🎰 IoT Chits Exchanger
 
 <div align="center">
@@ -37,7 +39,6 @@ The **IoT Chits Exchanger** is an intelligent, dual-platform automated currency 
 - **Smart Dispensing System**: Precise chit/token dispensing with servo-controlled mechanisms
 - **Interactive User Interface**: 20x4 LCD display with tactile button controls
 - **Audio Feedback**: Piezo buzzer for user interaction confirmation
-- **Change Management**: Intelligent coin hopper for change dispensing
 - **Real-time Monitoring**: Serial communication for system diagnostics and logging
 
 #### 🎯 **Chits to Coins (Raspberry Pi + AI Platform)**
@@ -45,17 +46,9 @@ The **IoT Chits Exchanger** is an intelligent, dual-platform automated currency 
 - **Intelligent Chit Recognition**: Advanced AI recognition of 5, 10, 20, and 50 peso chits
 - **Automated Chit Insertion**: Servo-controlled chit feeding mechanism
 - **High-Resolution Scanning**: Camera-based chit validation system
-- **ALLAN Coin Hopper Integration**: Professional-grade coin dispensing system
+- **Dual Coin Hopper System**: Professional-grade coin dispensing with both ALLAN and standard hoppers
 - **Real-time Image Processing**: GPU-accelerated inference for instant recognition
-
-### 🏆 Use Cases
-- 🎮 **Arcade Machines**: Bidirectional conversion between cash and game tokens
-- 🚌 **Public Transportation**: Smart ticket vending and validation systems
-- 🏪 **Retail Kiosks**: Complete self-service payment and refund processing
-- 🎫 **Event Venues**: Ticket dispensing and cashback systems
-- 🏛️ **Educational Institutions**: Campus card recharge and cash-out stations
-- 🏦 **Banking Kiosks**: Automated currency exchange services
-- 🎰 **Gaming Centers**: Token-to-cash conversion systems
+- **Change Management**: Intelligent coin dispensing for chit-to-coin conversion
 
 ## ✨ Features
 
@@ -75,15 +68,7 @@ The **IoT Chits Exchanger** is an intelligent, dual-platform automated currency 
 ### 🤖 Automated Dispensing (ESP32 Platform)
 - **🎯 Servo-Controlled Chit Dispenser**
   - PCA9685 PWM driver for precise control
-  - Configurable dispensing angles (0-180°)
-  - Variable speed control for different chit types
-  - Repeat dispensing capability
-
-- **🔄 Intelligent Coin Hopper**
-  - Motor-driven coin dispensing mechanism
-  - Optical sensor for accurate coin counting
-  - Configurable dispensing quantities
-  - Jam detection and prevention
+- Repeat dispensing capability
 
 ### 🤖 AI-Powered Chit Recognition (Raspberry Pi Platform)
 - **📸 YOLOv11 Computer Vision System**
@@ -98,6 +83,14 @@ The **IoT Chits Exchanger** is an intelligent, dual-platform automated currency 
   - High-resolution camera scanning (1080p minimum)
   - Multi-angle validation for authenticity verification
   - Error detection and rejection for invalid chits
+  - Real-time confidence scoring and validation
+
+- **🔄 Dual Coin Hopper System**
+  - Standard coin hopper for basic dispensing (migrated from ESP32)
+  - ALLAN professional hoppers for high-volume operations
+  - Motor-driven dispensing with optical sensor feedback
+  - Configurable dispensing quantities and jam detection
+  - Multi-denomination support with optimal coin combinations
   - Real-time confidence scoring and validation
 
 - **💰 ALLAN Coin Hopper Integration**
@@ -163,7 +156,6 @@ The **IoT Chits Exchanger** is an intelligent, dual-platform automated currency 
 | **Servo Motor** | Standard 9g Servo | 1 | Chit dispensing mechanism |
 | **PWM Driver** | PCA9685 16-Channel | 1 | Servo motor control |
 | **LCD Display** | 20x4 I2C LCD | 1 | User interface display |
-| **Coin Hopper** | Standard Motorized Hopper | 1 | Change dispensing |
 | **Tactile Buttons** | 12mm Push Buttons | 2 | User input controls |
 | **Piezo Buzzer** | 5V Active Buzzer | 1 | Audio feedback |
 | **Power Supply** | 5V/12V Dual Rail | 1 | System power |
@@ -173,10 +165,13 @@ The **IoT Chits Exchanger** is an intelligent, dual-platform automated currency 
 | Component | Model/Type | Quantity | Function |
 |-----------|------------|----------|----------|
 | **Single Board Computer** | Raspberry Pi 4B (4GB+) | 1 | AI processing and system control |
-| **Camera Module** |  USB 1080p | 1 | High-resolution chit scanning |
+| **Camera Module** | Pi Camera V3 (12MP) or USB 4K | 1 | High-resolution chit scanning |
+| **LCD Display** | 20x4 I2C LCD | 1 | User interface display |
 | **Chit Insertion Servo** | High-Torque Digital Servo | 1 | Automated chit feeding |
+| **Standard Coin Hopper** | Motorized Hopper (from ESP32) | 1 | Basic coin dispensing |
 | **ALLAN Coin Hopper** | ALLAN CH-926 Series | 4 | Multi-denomination coin dispensing |
 | **Hopper Controllers** | ALLAN Control Boards | 4 | Individual hopper control |
+| **Piezo Buzzer** | 5V Active Buzzer | 1 | Audio feedback |
 | **LED Lighting** | Ring Light/Strip LEDs | 1 | Optimal scanning illumination |
 | **Cooling System** | Active Fan + Heatsinks | 1 | Temperature management |
 | **Power Supply** | 12V/5A + 24V/3A | 1 | Dual voltage system power |
@@ -266,7 +261,6 @@ Common Commands:
 │   ├── 🤖 PCA9685 PWM Driver (I2C)
 │   ├── 📺 20x4 LCD Display (I2C)
 │   ├── 🎮 Control Buttons (GPIO 8, 9)
-│   ├── 🔄 Coin Hopper (GPIO 10, 11)
 │   └── 🔊 Piezo Buzzer (GPIO 12)
 │
 └── 🤖 Raspberry Pi Platform (Chits → Coins)
@@ -275,6 +269,14 @@ Common Commands:
     ├── 💡 LED Lighting System (GPIO 19)
     ├── 🖥️ Touch Display (HDMI + USB)
     ├── 🔈 Audio System (3.5mm/USB)
+    ├── 🔄 Standard Coin Hopper (GPIO 20, 21)
+    ├── 💰 ALLAN Coin Hoppers (4x Serial)
+    │   ├── 1 Peso Hopper (USB-Serial 1)
+    │   ├── 5 Peso Hopper (USB-Serial 2)
+    │   ├── 10 Peso Hopper (USB-Serial 3)
+    │   └── 20 Peso Hopper (USB-Serial 4)
+    └── 🌐 WiFi Communication Bridge
+```
     ├── 💰 ALLAN Coin Hoppers (4x Serial)
     │   ├── 5 Peso Hopper (USB-Serial 1)
     │   ├── 10 Peso Hopper (USB-Serial 2)
@@ -300,9 +302,6 @@ ESP32 Microcontroller (Cash Processing Hub)
 ├── 🎮 Control Buttons
 │   ├── LCD Button (GPIO 8)
 │   └── Coin Button (GPIO 9)
-├── 🔄 Standard Coin Hopper
-│   ├── Motor (GPIO 10)
-│   └── Sensor (GPIO 11)
 └── 🔊 Piezo Buzzer (GPIO 12) ───── Audio feedback
 ```
 
@@ -313,22 +312,30 @@ The Raspberry Pi system handles AI-powered chit recognition and professional coi
 ```
 Raspberry Pi 4B (AI Processing & Coin Dispensing Hub)
 ├── 📸 Camera System
-│   ├── USB 1080p Camera (USB 3.0)
- connector)
+│   ├── USB 4K Camera (USB 3.0)
+│   └── CSI Camera Module (40-pin connector)
 ├── 🎯 Chit Insertion Mechanism
 │   ├── Servo Motor (GPIO 18 - PWM)
 │   ├── Position Sensors (GPIO 20, 21)
 │   └── Chit Guide Rails (Mechanical)
 ├── 💡 Lighting System
-│   ├── LED Light (GPIO 19 - PWM)
+│   ├── LED Ring Light (GPIO 19 - PWM)
 │   ├── Brightness Control (PWM dimming)
 │   └── Color Temperature Adjustment
-
-├── 💰 ALLAN Coin Hopper Array
-│   ├── Hopper 1 (5 Peso) → USB-Serial Adapter 1
-│   ├── Hopper 2 (10 Peso) → USB-Serial Adapter 2
-│   ├── Hopper 3 20 Peso) → USB-Serial Adapter 3
-│   └── Hopper 4 (50 Peso) → USB-Serial Adapter 4
+├── 🖥️ User Interface
+│   ├── 20x4 I2C LCD (I2C, PCF8574)
+│   └── LCD display text output
+├── � Audio System
+│   └── Piezo Buzzer (GPIO 12) ───── Audio feedback
+├── 🔄 Standard Coin Hopper (Migrated from ESP32)
+│   ├── Motor Control (GPIO 22 - Relay)
+│   ├── Sensor Feedback (GPIO 23 - Input)
+│   └── Basic coin dispensing logic
+├── �💰 ALLAN Coin Hopper Array
+│   ├── Hopper 1 (1 Peso) → USB-Serial Adapter 1
+│   ├── Hopper 2 (5 Peso) → USB-Serial Adapter 2
+│   ├── Hopper 3 (10 Peso) → USB-Serial Adapter 3
+│   └── Hopper 4 (20 Peso) → USB-Serial Adapter 4
 └── 🌐 Communication
     ├── WiFi Module (Built-in)
     ├── ESP32 Bridge (UART/WiFi)
@@ -338,14 +345,15 @@ Raspberry Pi 4B (AI Processing & Coin Dispensing Hub)
 ### 🔌 Power Distribution Architecture
 
 #### ESP32 Platform Power System
-- **Main Power**: 12V DC for motors and high-power components
+- **Main Power**: 12V DC for high-power components
 - **Logic Power**: 5V DC for ESP32 and sensors (via voltage regulator)
 - **I2C Bus**: 3.3V logic level with pull-up resistors
 
 #### Raspberry Pi Platform Power System
 - **Primary Power**: 5V/4A for Raspberry Pi and peripherals
 - **Servo Power**: 12V/2A for high-torque chit insertion servo
-- **Hopper Power**: 24V/8A for ALLAN coin hoppers (2A per hopper)
+- **Standard Hopper Power**: 12V/2A for migrated coin hopper motor
+- **ALLAN Hopper Power**: 24V/8A for ALLAN coin hoppers (2A per hopper)
 - **Camera Power**: 5V/1A for USB camera and lighting system
 - **Display Power**: 12V/2A for 7-inch touchscreen
 
@@ -456,11 +464,10 @@ Communication Protocol:
 | **I2C SDA** | 21 | I2C Data | LCD & PCA9685 data line |
 | **I2C SCL** | 22 | I2C Clock | LCD & PCA9685 clock line |
 | **LCD Button** | 8 | Input (Pullup) | LCD menu navigation |
-| **Coin Button** | 9 | Input (Pullup) | Manual coin dispense |
-| **Hopper Motor** | 10 | Output | Coin hopper motor control |
-| **Hopper Sensor** | 11 | Input (Pullup) | Coin detection sensor |
+| **Coin Button** | 9 | Input (Pullup) | Manual operation button |
 | **Piezo Buzzer** | 12 | Output | Audio feedback |
 | **Status LED** | 13 | Output | System status indicator |
+| **Control Button** | 2 | Input | Main system control |
 | **Control Button** | 2 | Input | Main system control |
 
 </div>
@@ -475,10 +482,12 @@ Communication Protocol:
 | **LED Ring Light** | 19 | PWM Output | Scanning illumination control |
 | **Servo Position 1** | 20 | Input (Pullup) | Servo position sensor 1 |
 | **Servo Position 2** | 21 | Input (Pullup) | Servo position sensor 2 |
-| **Emergency Stop** | 22 | Input (Pullup) | Emergency stop button |
-| **System Status LED** | 23 | Output | System operational status |
-| **Camera Trigger** | 24 | Output | Camera capture trigger |
-| **Hopper Status** | 25 | Input | ALLAN hopper status input |
+| **Standard Hopper Motor** | 22 | Output (Relay) | Standard coin hopper motor control |
+| **Standard Hopper Sensor** | 23 | Input (Pullup) | Standard coin hopper sensor |
+| **Emergency Stop** | 24 | Input (Pullup) | Emergency stop button |
+| **System Status LED** | 25 | Output | System operational status |
+| **Camera Trigger** | 26 | Output | Camera capture trigger |
+| **ALLAN Hopper Status** | 27 | Input | ALLAN hopper status input |
 
 </div>
 
@@ -520,8 +529,7 @@ source/esp32/ChitExchanger/
 ├── 🤖 SERVO_DISPENSER.h/.cpp     # Servo control system
 ├── 📺 I2C_LCD.h/.cpp             # LCD display management
 ├── 🎮 TACTILE_BUTTON.h/.cpp      # Button input handling
-├── 🔄 COIN_HOPPER.h/.cpp         # Coin dispensing system
-├── 🔊 PIEZO_BUZZER.h/.cpp        # Audio feedback system
+├──  PIEZO_BUZZER.h/.cpp        # Audio feedback system
 ├── ⚙️ PIN_CONFIGURATION.h        # Centralized pin definitions
 └── 🌐 WIFI_COMMUNICATION.h/.cpp  # WiFi bridge to Raspberry Pi
 ```
@@ -543,17 +551,12 @@ source/rpi/ChitExchanger/
 │   ├── servo_controller.py      # Chit insertion servo control
 │   ├── camera_manager.py        # Camera system management
 │   ├── lighting_controller.py   # LED lighting control
+│   ├── coin_hopper.py           # Standard coin hopper (migrated from ESP32)
 │   ├── allan_hopper.py          # ALLAN coin hopper interface
+│   ├── i2c_lcd.py               # 20x4 I2C LCD display control
 │   └── gpio_manager.py          # GPIO pin management
 ├── 🖥️ gui/
-│   ├── main_window.py           # Main GUI application
-│   ├── camera_preview.py        # Real-time camera preview
-│   ├── transaction_display.py   # Transaction status display
-│   ├── settings_panel.py        # System configuration
-│   └── resources/
-│       ├── icons/               # GUI icons and images
-│       ├── sounds/              # Audio feedback files
-│       └── styles.qss           # Qt stylesheet
+    # (No GUI/touchscreen files; all user feedback via LCD and buzzer)
 ├── 🌐 communication/
 │   ├── esp32_bridge.py          # ESP32 communication bridge
 │   ├── mqtt_client.py           # Cloud communication
@@ -1113,19 +1116,17 @@ Edit `config.json`:
 #### Mode 2: Chits to Coins (Raspberry Pi + AI Platform)
 
 ##### AI-Powered Operation Flow
-1. **Touch Interface**: Customer selects "Chit to Coins" on touchscreen
-2. **Insertion Prompt**: GUI shows chit insertion instructions with visual guide
-3. **Servo Positioning**: Automated servo moves to chit insertion position
-4. **Chit Insertion**: Customer inserts chit into guided slot
-5. **Servo Feed**: Servo automatically feeds chit into scanning area
-6. **High-Res Capture**: Camera captures multiple high-resolution images
-7. **AI Processing**: YOLOv11 model processes images for chit detection
-8. **Classification**: AI determines chit denomination (5, 10, 20, 50 peso)
-9. **Validation**: Multi-stage validation ensures authenticity
-10. **Coin Calculation**: System calculates equivalent coin value
-11. **ALLAN Dispensing**: Appropriate hoppers dispense exact coins
-12. **Audio Feedback**: Success confirmation with voice prompt
-13. **Transaction Complete**: GUI shows completion and transaction summary
+1. **LCD Prompt**: 20x4 I2C LCD displays "Insert chit for coin exchange"
+2. **Chit Insertion**: Customer inserts chit into guided slot
+3. **Servo Feed**: Servo automatically feeds chit into scanning area
+4. **High-Res Capture**: Camera captures multiple high-resolution images
+5. **AI Processing**: YOLOv11 model processes images for chit detection
+6. **Classification**: AI determines chit denomination (5, 10, 20, 50 peso)
+7. **Validation**: Multi-stage validation ensures authenticity
+8. **Coin Calculation**: System calculates equivalent coin value
+9. **ALLAN Dispensing**: Appropriate hoppers dispense exact coins
+10. **Audio Feedback**: Piezo buzzer sounds for success/error
+11. **LCD Summary**: LCD displays transaction completion and coin details
 
 ##### YOLOv11 AI Processing Details
 ```python
@@ -1691,20 +1692,6 @@ extern long lastDebounceTime[numOfInputs];  // Debounce timing
 extern long debounceDelay;                  // 10ms debounce delay
 ```
 
-#### Coin Hopper Functions
-
-```cpp
-// Initialize coin hopper motor and sensor
-void initCoinHopper();
-
-// Dispense specified number of coins
-void dispenseCoins(int count);
-
-// Pin definitions
-#define HOPPER_MOTOR_PIN 10   // Motor control pin
-#define HOPPER_SENSOR_PIN 11  // Coin detection sensor
-```
-
 #### Audio System Functions
 
 ```cpp
@@ -1886,6 +1873,110 @@ class ALLANHopper:
         
     def reset(self) -> bool:
         """Reset hopper to default state"""
+```
+
+#### Standard Coin Hopper API
+#### I2C LCD Display API
+
+```python
+class I2CLCD:
+    """20x4 I2C LCD display control (PCF8574 backpack)"""
+    def __init__(self, i2c_addr: int = 0x27, bus: int = 1):
+        """Initialize LCD on I2C bus"""
+    def display_text(self, text: str, row: int = 0, col: int = 0):
+        """Display text at specified row/column"""
+    def clear(self):
+        """Clear LCD display"""
+    def set_cursor(self, row: int, col: int):
+        """Set cursor position"""
+    def backlight(self, on: bool = True):
+        """Control LCD backlight"""
+    def cleanup(self):
+        """Release I2C resources"""
+```
+
+#### Piezo Buzzer API
+
+```python
+class PiezoBuzzer:
+    """Piezo buzzer control for audio feedback"""
+    def __init__(self, gpio_pin: int = 12):
+        """Initialize buzzer on GPIO pin"""
+    def play_tone(self, frequency: int, duration: float):
+        """Play tone at frequency (Hz) for duration (seconds)"""
+    def play_success(self):
+        """Play success sound"""
+    def play_error(self):
+        """Play error sound"""
+    def cleanup(self):
+        """Release GPIO resources"""
+```
+
+```python
+class StandardCoinHopper:
+    """Standard coin hopper control (migrated from ESP32)"""
+    
+    def __init__(self, motor_pin: int = 22, sensor_pin: int = 23):
+        """
+        Initialize standard coin hopper
+        
+        Args:
+            motor_pin: GPIO pin for motor control (relay)
+            sensor_pin: GPIO pin for coin detection sensor
+        """
+        
+    def initialize(self) -> bool:
+        """
+        Initialize hopper motor and sensor
+        
+        Returns:
+            bool: Initialization success status
+        """
+        
+    def dispense_coins(self, count: int) -> bool:
+        """
+        Dispense specified number of coins
+        
+        Args:
+            count: Number of coins to dispense
+            
+        Returns:
+            bool: Dispensing success status
+        """
+        
+    def detect_coin(self) -> bool:
+        """
+        Detect coin passing through sensor
+        
+        Returns:
+            bool: True if coin detected
+        """
+        
+    def get_status(self) -> Dict:
+        """
+        Get hopper status information
+        
+        Returns:
+            Dict: {
+                'motor_running': bool,
+                'sensor_active': bool,
+                'coins_dispensed': int,
+                'last_dispense_time': str,
+                'error_status': str
+            }
+        """
+        
+    def test_motor(self) -> bool:
+        """Test motor functionality"""
+        
+    def test_sensor(self) -> bool:
+        """Test sensor functionality"""
+        
+    def stop_motor(self) -> None:
+        """Emergency stop motor"""
+        
+    def cleanup(self) -> None:
+        """Clean up GPIO resources"""
 ```
 
 #### Servo Control API
