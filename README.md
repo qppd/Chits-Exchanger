@@ -267,7 +267,7 @@ Common Commands:
     ├── 📸 Camera System (USB/CSI)
     ├── 🎯 Chit Insertion Servo (GPIO 18)
     ├── 💡 LED Lighting System (GPIO 19)
-    ├── 🖥️ Touch Display (HDMI + USB)
+        ├── 🖥️ Touch Display (HDMI + USB)
     ├── 🔈 Audio System (3.5mm/USB)
     ├── 🔄 Standard Coin Hopper (GPIO 20, 21)
     ├── 💰 ALLAN Coin Hoppers (4x Serial)
@@ -282,7 +282,7 @@ Common Commands:
     │   ├── 10 Peso Hopper (USB-Serial 2)
     │   ├── 20 Peso Hopper (USB-Serial 3)
     │   └── 50 Peso Hopper (USB-Serial 4)
-    └── 🌐 WiFi Communication Bridge
+        ├── 🌐 WiFi Communication Bridge
 ```
 
 ### 📊 ESP32 Platform Connection Overview
@@ -350,12 +350,12 @@ Raspberry Pi 4B (AI Processing & Coin Dispensing Hub)
 - **I2C Bus**: 3.3V logic level with pull-up resistors
 
 #### Raspberry Pi Platform Power System
-- **Primary Power**: 5V/4A for Raspberry Pi and peripherals
-- **Servo Power**: 12V/2A for high-torque chit insertion servo
-- **Standard Hopper Power**: 12V/2A for migrated coin hopper motor
-- **ALLAN Hopper Power**: 24V/8A for ALLAN coin hoppers (2A per hopper)
-- **Camera Power**: 5V/1A for USB camera and lighting system
-- **Display Power**: 12V/2A for 7-inch touchscreen
+**Primary Power**: 5V/4A for Raspberry Pi and peripherals
+**Servo Power**: 12V/2A for high-torque chit insertion servo
+**Standard Hopper Power**: 12V/2A for migrated coin hopper motor
+**ALLAN Hopper Power**: 24V/8A for ALLAN coin hoppers (2A per hopper)
+**Camera Power**: 5V/1A for USB camera and lighting system
+**Display Power**: 12V/2A for 7-inch touchscreen
 
 ### 🤖 YOLOv11 AI System Architecture
 
@@ -555,8 +555,7 @@ source/rpi/ChitExchanger/
 │   ├── allan_hopper.py          # ALLAN coin hopper interface
 │   ├── i2c_lcd.py               # 20x4 I2C LCD display control
 │   └── gpio_manager.py          # GPIO pin management
-├── 🖥️ gui/
-    # (No GUI/touchscreen files; all user feedback via LCD and buzzer)
+    ├── 🖥️ gui/
 ├── 🌐 communication/
 │   ├── esp32_bridge.py          # ESP32 communication bridge
 │   ├── mqtt_client.py           # Cloud communication
@@ -750,7 +749,7 @@ class ALLANHopper:
 
 #### Raspberry Pi Main Loop Operations
 1. **Camera Monitoring**: Continuous frame capture and processing
-2. **GUI Updates**: Real-time interface updates and user feedback
+2. **Interface Updates**: Real-time LCD and button-based user feedback
 3. **AI Processing**: YOLOv11 model inference on captured images
 4. **Servo Control**: Precise chit insertion and positioning
 5. **Hopper Management**: ALLAN coin hopper control and monitoring
@@ -768,7 +767,7 @@ class ALLANHopper:
 - **microSD Card** (64GB+ Class 10 for Raspberry Pi)
 - **USB-to-Serial Adapters** (4x for ALLAN hoppers)
 - **USB 4K Camera** or Raspberry Pi Camera Module V3
-- **7-inch Touchscreen Display** for Raspberry Pi
+- **20x4 I2C LCD** for Raspberry Pi
 - All hardware components listed in [Hardware Components](#-hardware-components) section
 
 #### Software Requirements
@@ -1190,25 +1189,28 @@ def dispense_coins_for_chit(chit_value):
 | `WiFi: Connected` | Network status | System online |
 | `Error: Contact Staff` | System malfunction | Technical assistance |
 
-#### Raspberry Pi Touch Interface Screens
+#### Raspberry Pi Interface Screens (LCD + Buttons)
 
 ##### Main Menu
-- **Large touch buttons** for easy operation
-- **Real-time camera preview** for chit positioning
-- **System status indicators** (hoppers, connectivity)
-- **Transaction history** button
-- **Settings/Admin** access (password protected)
+- **LCD menu** for basic navigation
+- **Button-based controls** for operations and confirmations
+- **System status indicators** shown on LCD (hoppers, connectivity)
+- **Transaction history** accessible via admin menu
 
 ##### Chit Processing Screen
-- **Live camera feed** with overlay guides
-- **Processing status** with progress indicators
-- **AI confidence meter** showing detection quality
-- **Denomination display** with visual confirmation
-- **Coin dispensing status** for each hopper
-- **Cancel operation** button for user control
+- **LCD prompts** guide chit insertion and processing
+- **Processing status** displayed on LCD with simple progress messages
+- **AI confidence** shown as text percentage on LCD
+- **Denomination display** with numeric confirmation
+- **Coin dispensing status** for each hopper shown on LCD
+- **Cancel operation** via physical button
 
 ##### Transaction Summary
-- **Chit value processed** with image thumbnail
+- **Chit value processed** shown on LCD
+- **Coins dispensed** breakdown by denomination on LCD
+- **Transaction timestamp** and reference number on LCD
+- **Print receipt** option (if printer connected)
+- **Return to main menu** via button
 - **Coins dispensed** breakdown by denomination
 - **Transaction timestamp** and reference number
 - **Print receipt** option (if printer connected)
