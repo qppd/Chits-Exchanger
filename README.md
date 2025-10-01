@@ -1,6 +1,4 @@
-**LCD Power**: 5V/0.5A for 20x4 I2C LCD
-**Buzzer Power**: 5V/0.1A for piezo buzzer
-# 🎰 IoT Chits Exchanger
+# IoT Chits Exchanger
 
 <div align="center">
   <img src="diagram/Peso_Bill_To_Chit.png" alt="Chits Exchanger Wiring Diagram" width="600"/>
