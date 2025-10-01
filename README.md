@@ -2462,12 +2462,14 @@ copies or substantial portions of the Software.
 
 ### 🌟 Acknowledgments
 
+
 Special thanks to:
 - **Arduino Community** for the excellent development platform
 - **Adafruit** for the PWM servo driver library
 - **LiquidCrystal_I2C** library contributors
 - **ESP32 Community** for hardware support and documentation
 - **Beta Testers** who helped refine the system
+- **Edje Electronics** for their Raspberry Pi YOLO project and tutorial ([YOLO on Raspberry Pi](https://www.ejtech.io/learn/yolo-on-raspberry-pi))
 
 ---
 
