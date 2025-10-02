@@ -28,13 +28,13 @@
 
 ## 🎯 Overview
 
-The **IoT Chits Exchanger** is an intelligent, dual-platform automated currency exchange system that provides bidirectional conversion between physical currency and digital chits/tokens. This comprehensive solution combines ESP32 microcontroller technology with Raspberry Pi-based computer vision for complete automation of currency exchange operations.
+The **IoT Chits Exchanger** is an intelligent, dual-platform automated currency exchange system that provides bidirectional conversion between physical currency and chits. This comprehensive solution combines ESP32 microcontroller technology with Raspberry Pi-based computer vision for complete automation of currency exchange operations.
 
 ### 🔧 Core Functionality
 
 #### 💰 **Cash to Chits (ESP32 Platform)**
 - **Automated Currency Processing**: Real-time detection and validation of coins and bills
-- **Smart Dispensing System**: Precise chit/token dispensing with servo-controlled mechanisms
+- **Smart Dispensing System**: Precise chit dispensing with servo-controlled mechanisms
 - **Interactive User Interface**: 20x4 LCD display with tactile button controls
 - **Audio Feedback**: Piezo buzzer for user interaction confirmation
 - **Real-time Monitoring**: Serial communication for system diagnostics and logging
@@ -44,8 +44,8 @@ The **IoT Chits Exchanger** is an intelligent, dual-platform automated currency 
 - **Intelligent Chit Recognition**: Advanced AI recognition of 5, 10, 20, and 50 peso chits
 - **Automated Chit Insertion**: Servo-controlled chit feeding mechanism
 - **High-Resolution Scanning**: Camera-based chit validation system
-- **Dual Coin Hopper System**: Professional-grade coin dispensing with both ALLAN and standard hoppers
-- **Real-time Image Processing**: GPU-accelerated inference for instant recognition
+- **Dual Coin Hopper System**: Professional-grade coin dispensing with both ALLAN hoppers
+- **Real-time Image Processing**: CPU-accelerated inference for instant recognition
 - **Change Management**: Intelligent coin dispensing for chit-to-coin conversion
 
 ## ✨ Features
@@ -70,11 +70,10 @@ The **IoT Chits Exchanger** is an intelligent, dual-platform automated currency 
 
 ### 🤖 AI-Powered Chit Recognition (Raspberry Pi Platform)
 - **📸 YOLOv11 Computer Vision System**
-  - Real-time object detection and classification
+  - Real-time object detection or classification
   - Custom-trained model for Philippine peso chits (5, 10, 20, 50)
-  - 99.5%+ accuracy in chit denomination recognition
+  - 95.5%+ accuracy in chit denomination recognition
   - Sub-second processing time for instant verification
-  - GPU acceleration support (NVIDIA Jetson compatible)
 
 - **🎯 Intelligent Chit Processing**
   - Automated chit insertion via servo mechanism
@@ -83,35 +82,22 @@ The **IoT Chits Exchanger** is an intelligent, dual-platform automated currency 
   - Error detection and rejection for invalid chits
   - Real-time confidence scoring and validation
 
-- **🔄 Dual Coin Hopper System**
-  - Standard coin hopper for basic dispensing (migrated from ESP32)
-  - ALLAN professional hoppers for high-volume operations
-  - Motor-driven dispensing with optical sensor feedback
-  - Configurable dispensing quantities and jam detection
-  - Multi-denomination support with optimal coin combinations
-  - Real-time confidence scoring and validation
-
 - **💰 ALLAN Coin Hopper Integration**
   - Professional-grade coin dispensing system
   - Support for multiple coin denominations
   - Precise coin counting and validation
   - Anti-jamming mechanisms with error recovery
-  - High-capacity coin storage (500+ coins per denomination)
+  - High-capacity coin storage (300+ coins per denomination)
   - Serial communication protocol for Raspberry Pi control
 
 ### 💻 User Interface Systems
 - **📺 ESP32 - 20x4 I2C LCD Display**
   - Real-time transaction information
-  - Multi-language support capability
-  - Custom message display
   - System status indicators
-
-
 
 - **🎮 Tactile Control Interface**
   - Debounced button inputs for reliability
   - LCD control button for menu navigation
-  - Coin dispensing button for manual operations
   - Emergency stop functionality
 
 ### 🔊 Audio Feedback Systems
@@ -120,12 +106,6 @@ The **IoT Chits Exchanger** is an intelligent, dual-platform automated currency 
   - Variable duration audio feedback
   - System status audio indicators
   - Error notification sounds
-
-- **🔈 Raspberry Pi Audio System**
-  - High-quality speaker output
-  - Voice prompts for chit insertion guidance
-  - Success/failure audio notifications
-  - Multilingual audio support
 
 ### 🌐 Connectivity & Communication
 - **📡 Inter-System Communication**
@@ -136,9 +116,6 @@ The **IoT Chits Exchanger** is an intelligent, dual-platform automated currency 
 
 - **🌍 Network Integration**
   - WiFi connectivity for both platforms
-  - Cloud-based transaction logging
-  - Remote system monitoring and diagnostics
-  - OTA (Over-The-Air) firmware updates
 
 ## 🔧 Hardware Components
 
@@ -163,12 +140,10 @@ The **IoT Chits Exchanger** is an intelligent, dual-platform automated currency 
 | Component | Model/Type | Quantity | Function |
 |-----------|------------|----------|----------|
 | **Single Board Computer** | Raspberry Pi 4B (4GB+) | 1 | AI processing and system control |
-| **Camera Module** | Pi Camera V3 (12MP) or USB 4K | 1 | High-resolution chit scanning |
+| **Camera Module** | USB 1080p Camera | 1 | High-resolution chit scanning |
 | **LCD Display** | 20x4 I2C LCD | 1 | User interface display |
 | **Chit Insertion Servo** | High-Torque Digital Servo | 1 | Automated chit feeding |
-| **Standard Coin Hopper** | Motorized Hopper (from ESP32) | 1 | Basic coin dispensing |
 | **ALLAN Coin Hopper** | ALLAN CH-926 Series | 4 | Multi-denomination coin dispensing |
-| **Hopper Controllers** | ALLAN Control Boards | 4 | Individual hopper control |
 | **Piezo Buzzer** | 5V Active Buzzer | 1 | Audio feedback |
 | **LED Lighting** | Ring Light/Strip LEDs | 1 | Optimal scanning illumination |
 | **Cooling System** | Active Fan + Heatsinks | 1 | Temperature management |
@@ -267,20 +242,12 @@ Common Commands:
     ├── 💡 LED Lighting System (GPIO 19)
         ├── 🖥️ Touch Display (HDMI + USB)
     ├── 🔈 Audio System (3.5mm/USB)
-    ├── 🔄 Standard Coin Hopper (GPIO 20, 21)
-    ├── 💰 ALLAN Coin Hoppers (4x Serial)
-    │   ├── 1 Peso Hopper (USB-Serial 1)
-    │   ├── 5 Peso Hopper (USB-Serial 2)
-    │   ├── 10 Peso Hopper (USB-Serial 3)
-    │   └── 20 Peso Hopper (USB-Serial 4)
-    └── 🌐 WiFi Communication Bridge
-```
     ├── 💰 ALLAN Coin Hoppers (4x Serial)
     │   ├── 5 Peso Hopper (USB-Serial 1)
     │   ├── 10 Peso Hopper (USB-Serial 2)
     │   ├── 20 Peso Hopper (USB-Serial 3)
     │   └── 50 Peso Hopper (USB-Serial 4)
-        ├── 🌐 WiFi Communication Bridge
+    └── 🌐 WiFi Communication Bridge
 ```
 
 ### 📊 ESP32 Platform Connection Overview
@@ -310,8 +277,7 @@ The Raspberry Pi system handles AI-powered chit recognition and professional coi
 ```
 Raspberry Pi 4B (AI Processing & Coin Dispensing Hub)
 ├── 📸 Camera System
-│   ├── USB 4K Camera (USB 3.0)
-│   └── CSI Camera Module (40-pin connector)
+│   ├── USB 1080p Camera (USB 2.0)
 ├── 🎯 Chit Insertion Mechanism
 │   ├── Servo Motor (GPIO 18 - PWM)
 │   ├── Position Sensors (GPIO 20, 21)
@@ -321,23 +287,16 @@ Raspberry Pi 4B (AI Processing & Coin Dispensing Hub)
 │   ├── Brightness Control (PWM dimming)
 │   └── Color Temperature Adjustment
 ├── 🖥️ User Interface
-│   ├── 20x4 I2C LCD (I2C, PCF8574)
+│   ├── 20x4 I2C LCD (I2C)
 │   └── LCD display text output
 ├── � Audio System
 │   └── Piezo Buzzer (GPIO 12) ───── Audio feedback
-├── 🔄 Standard Coin Hopper (Migrated from ESP32)
-│   ├── Motor Control (GPIO 22 - Relay)
-│   ├── Sensor Feedback (GPIO 23 - Input)
-│   └── Basic coin dispensing logic
 ├── �💰 ALLAN Coin Hopper Array
-│   ├── Hopper 1 (1 Peso) → USB-Serial Adapter 1
-│   ├── Hopper 2 (5 Peso) → USB-Serial Adapter 2
-│   ├── Hopper 3 (10 Peso) → USB-Serial Adapter 3
-│   └── Hopper 4 (20 Peso) → USB-Serial Adapter 4
-└── 🌐 Communication
-    ├── WiFi Module (Built-in)
-    ├── ESP32 Bridge (UART/WiFi)
-    └── Cloud Integration (MQTT/HTTP)
+│   ├── Hopper 1 (5 Peso) → USB-Serial Adapter 1
+│   ├── Hopper 2 (10 Peso) → USB-Serial Adapter 2
+│   ├── Hopper 3 (20 Peso) → USB-Serial Adapter 3
+│   └── Hopper 4 (50 Peso) → USB-Serial Adapter 4
+
 ```
 
 ### 🔌 Power Distribution Architecture
@@ -384,7 +343,7 @@ YOLOv11 Chit Detection Model
 - **Variations**: Multiple angles, lighting conditions, wear states
 - **Augmentations**: Rotation, scaling, color adjustment, noise
 - **Validation Split**: 80% training, 20% validation
-- **Test Accuracy**: 99.5%+ on validation set
+- **Test Accuracy**: 95.5%+ on validation set
 
 #### Real-time Processing Pipeline
 ```python
@@ -762,9 +721,9 @@ class ALLANHopper:
 #### Hardware Requirements
 - **ESP32 Development Board** (ESP32 DevKit v1 or similar)
 - **Raspberry Pi 4B** (4GB RAM minimum, 8GB recommended)
-- **microSD Card** (64GB+ Class 10 for Raspberry Pi)
+- **microSD Card** (32GB+ Class 10 for Raspberry Pi)
 - **USB-to-Serial Adapters** (4x for ALLAN hoppers)
-- **USB 4K Camera** or Raspberry Pi Camera Module V3
+- **USB 1080p Camera**
 - **20x4 I2C LCD** for Raspberry Pi
 - All hardware components listed in [Hardware Components](#-hardware-components) section
 
@@ -779,8 +738,7 @@ class ALLANHopper:
 - **Raspberry Pi OS** (64-bit, Desktop version)
 - **Python 3.9+** with pip
 - **OpenCV 4.5+** for computer vision
-- **PyTorch 1.12+** for YOLOv11
-- **Qt5/PyQt5** for GUI development
+- **Ultralytics** for YOLOv11
 
 #### Required Libraries
 
