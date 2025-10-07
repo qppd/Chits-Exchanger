@@ -98,11 +98,56 @@ void setup() {
 }
 
 void loop() {
-  // Nothing needed here, camera server runs in background
+  // Handle incoming HTTP requests for streaming
+  handleStreamRequest();
 }
 
 // Camera streaming server implementation
 void startCameraServer() {
-  // ...existing code for MJPEG streaming over HTTP...
-  // For full implementation, see ESP32-CAM camera web server examples
+  Serial.println("Starting camera server on port 80");
+  // Server is already started with server.begin() in setup()
+}
+
+void handleStreamRequest() {
+  WiFiClient client = server.available();
+  if (client) {
+    String request = client.readStringUntil('\r');
+    client.flush();
+    
+    if (request.indexOf("/stream") != -1) {
+      client.println("HTTP/1.1 200 OK");
+      client.println("Content-Type: multipart/x-mixed-replace; boundary=frame");
+      client.println("Connection: close");
+      client.println();
+      
+      while (client.connected()) {
+        camera_fb_t * fb = esp_camera_fb_get();
+        if (!fb) {
+          Serial.println("Camera capture failed");
+          break;
+        }
+        
+        client.println("--frame");
+        client.println("Content-Type: image/jpeg");
+        client.print("Content-Length: ");
+        client.println(fb->len);
+        client.println();
+        client.write(fb->buf, fb->len);
+        client.println();
+        
+        esp_camera_fb_return(fb);
+        delay(30); // ~30 FPS
+      }
+    } else if (request.indexOf("/") != -1) {
+      // Send HTML page
+      client.println("HTTP/1.1 200 OK");
+      client.println("Content-Type: text/html");
+      client.println();
+      client.println("<!DOCTYPE html><html><head><title>ESP32-CAM Stream</title></head>");
+      client.println("<body><h1>ESP32-CAM Live Stream</h1>");
+      client.println("<img src='/stream' style='width:100%; max-width:800px;'>");
+      client.println("</body></html>");
+    }
+    client.stop();
+  }
 }
