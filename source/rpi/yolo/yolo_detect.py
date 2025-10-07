@@ -9,12 +9,8 @@ import numpy as np
 from ultralytics import YOLO
 
 # Define and parse user input arguments
-
 parser = argparse.ArgumentParser()
 parser.add_argument('--model', help='Path to YOLO model file (example: "runs/detect/train/weights/best.pt")',
-                    required=True)
-parser.add_argument('--source', help='Image source, can be image file ("test.jpg"), \
-                    image folder ("test_dir"), video file ("testvid.mp4"), or index of USB camera ("usb0")', 
                     required=True)
 parser.add_argument('--thresh', help='Minimum confidence threshold for displaying detected objects (example: "0.4")',
                     default=0.5)
@@ -26,10 +22,11 @@ parser.add_argument('--record', help='Record results from video or webcam and sa
 
 args = parser.parse_args()
 
+# ESP32-CAM HTTP stream URL - hardcoded
+img_source = 'http://192.168.1.21/stream'  # Default IP when in AP mode, change if needed
 
 # Parse user inputs
 model_path = args.model
-img_source = args.source
 min_thresh = args.thresh
 user_res = args.resolution
 record = args.record
@@ -43,30 +40,9 @@ if (not os.path.exists(model_path)):
 model = YOLO(model_path, task='detect')
 labels = model.names
 
-# Parse input to determine if image source is a file, folder, video, or USB camera
-img_ext_list = ['.jpg','.JPG','.jpeg','.JPEG','.png','.PNG','.bmp','.BMP']
-vid_ext_list = ['.avi','.mov','.mp4','.mkv','.wmv']
-
-if os.path.isdir(img_source):
-    source_type = 'folder'
-elif os.path.isfile(img_source):
-    _, ext = os.path.splitext(img_source)
-    if ext in img_ext_list:
-        source_type = 'image'
-    elif ext in vid_ext_list:
-        source_type = 'video'
-    else:
-        print(f'File extension {ext} is not supported.')
-        sys.exit(0)
-elif 'usb' in img_source:
-    source_type = 'usb'
-    usb_idx = int(img_source[3:])
-elif 'picamera' in img_source:
-    source_type = 'picamera'
-    picam_idx = int(img_source[8:])
-else:
-    print(f'Input {img_source} is invalid. Please try again.')
-    sys.exit(0)
+# Set source type to RTSP stream
+source_type = 'rtsp'
+print(f'Connecting to ESP32-CAM RTSP stream at: {img_source}')
 
 # Parse user-specified display resolution
 resize = False
@@ -88,32 +64,20 @@ if record:
     record_fps = 30
     recorder = cv2.VideoWriter(record_name, cv2.VideoWriter_fourcc(*'MJPG'), record_fps, (resW,resH))
 
-# Load or initialize image source
-if source_type == 'image':
-    imgs_list = [img_source]
-elif source_type == 'folder':
-    imgs_list = []
-    filelist = glob.glob(img_source + '/*')
-    for file in filelist:
-        _, file_ext = os.path.splitext(file)
-        if file_ext in img_ext_list:
-            imgs_list.append(file)
-elif source_type == 'video' or source_type == 'usb':
+# Initialize RTSP stream connection
+cap = cv2.VideoCapture(img_source)
 
-    if source_type == 'video': cap_arg = img_source
-    elif source_type == 'usb': cap_arg = usb_idx
-    cap = cv2.VideoCapture(cap_arg)
+# Set camera resolution if specified by user
+if user_res:
+    ret = cap.set(3, resW)
+    ret = cap.set(4, resH)
 
-    # Set camera or video resolution if specified by user
-    if user_res:
-        ret = cap.set(3, resW)
-        ret = cap.set(4, resH)
+# Check if connection is successful
+if not cap.isOpened():
+    print(f"Failed to connect to ESP32-CAM stream at {img_source}")
+    sys.exit(1)
 
-elif source_type == 'picamera':
-    from picamera2 import Picamera2
-    cap = Picamera2()
-    cap.configure(cap.create_video_configuration(main={"format": 'XRGB8888', "size": (resW, resH)}))
-    cap.start()
+print("Successfully connected to ESP32-CAM stream")
 
 # Set bounding box colors (using the Tableu 10 color scheme)
 bbox_colors = [(164,120,87), (68,148,228), (93,97,209), (178,182,133), (88,159,106), 
@@ -125,15 +89,7 @@ frame_rate_buffer = []
 fps_avg_len = 200
 img_count = 0
 
-# ESP32-CAM stream URL (change if needed)
-ESP32_CAM_URL = 'http://192.168.1.21/stream'  # Default AP mode IP
-
-# Connect to MJPEG stream
-cap = cv2.VideoCapture(ESP32_CAM_URL)
-if not cap.isOpened():
-    print(f"Failed to connect to ESP32-CAM stream at {ESP32_CAM_URL}")
-    exit(1)
-
+# Begin YOLO detection using ESP32-CAM RTSP stream
 print("Connected to ESP32-CAM. Running detection...")
 
 # Begin inference loop
@@ -141,33 +97,16 @@ while True:
 
     t_start = time.perf_counter()
 
-    # Load frame from image source
-    if source_type == 'image' or source_type == 'folder': # If source is image or image folder, load the image using its filename
-        if img_count >= len(imgs_list):
-            print('All images have been processed. Exiting program.')
-            sys.exit(0)
-        img_filename = imgs_list[img_count]
-        frame = cv2.imread(img_filename)
-        img_count = img_count + 1
-    
-    elif source_type == 'video': # If source is a video, load next frame from video file
-        ret, frame = cap.read()
-        if not ret:
-            print('Reached end of the video file. Exiting program.')
+    # Read frame from RTSP stream
+    ret, frame = cap.read()
+    if not ret or frame is None:
+        print('Unable to read frame from ESP32-CAM stream. Attempting to reconnect...')
+        cap.release()
+        cap = cv2.VideoCapture(img_source)
+        if not cap.isOpened():
+            print('Reconnection failed. Exiting program.')
             break
-    
-    elif source_type == 'usb': # If source is a USB camera, grab frame from camera
-        ret, frame = cap.read()
-        if (frame is None) or (not ret):
-            print('Unable to read frames from the camera. This indicates the camera is disconnected or not working. Exiting program.')
-            break
-
-    elif source_type == 'picamera': # If source is a Picamera, grab frames using picamera interface
-        frame_bgra = cap.capture_array()
-        frame = cv2.cvtColor(np.copy(frame_bgra), cv2.COLOR_BGRA2BGR)
-        if (frame is None):
-            print('Unable to read frames from the Picamera. This indicates the camera is disconnected or not working. Exiting program.')
-            break
+        continue
 
     # Resize frame to desired display resolution
     if resize == True:
@@ -222,11 +161,8 @@ while True:
     cv2.imshow('YOLO detection results',frame) # Display image
     if record: recorder.write(frame)
 
-    # If inferencing on individual images, wait for user keypress before moving to next image. Otherwise, wait 5ms before moving to next frame.
-    if source_type == 'image' or source_type == 'folder':
-        key = cv2.waitKey()
-    elif source_type == 'video' or source_type == 'usb' or source_type == 'picamera':
-        key = cv2.waitKey(5)
+    # Wait for key press (5ms timeout)
+    key = cv2.waitKey(5) & 0xFF
     
     if key == ord('q') or key == ord('Q'): # Press 'q' to quit
         break
@@ -252,9 +188,6 @@ while True:
 
 # Clean up
 print(f'Average pipeline FPS: {avg_frame_rate:.2f}')
-if source_type == 'video' or source_type == 'usb':
-    cap.release()
-elif source_type == 'picamera':
-    cap.stop()
+cap.release()
 if record: recorder.release()
 cv2.destroyAllWindows()
