@@ -1,0 +1,29 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.env
+.env
+# Jupyter
+.ipynb_checkpoints/
+# Logs
+*.log
+# Temp files
+*.tmp
+*.bak
+# VS Code
+.vscode/
+# macOS
+.DS_Store
+# Fritzing
+*.fzz
+# Images
+*.png
+# Model files
+*.pt
+*.torchscript
+*.bin
+*.param
+runs/
