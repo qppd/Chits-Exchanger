@@ -22,7 +22,7 @@ parser.add_argument('--record', help='Record results from video or webcam and sa
 
 args = parser.parse_args()
 
-# ESP32-CAM HTTP stream URL - hardcoded
+# ESP32-CAM HTTP stream URL
 img_source = 'http://192.168.1.21/stream'  # Default IP when in AP mode, change if needed
 
 # Parse user inputs
