@@ -125,6 +125,17 @@ frame_rate_buffer = []
 fps_avg_len = 200
 img_count = 0
 
+# ESP32-CAM stream URL (change if needed)
+ESP32_CAM_URL = 'http://192.168.1.21/stream'  # Default AP mode IP
+
+# Connect to MJPEG stream
+cap = cv2.VideoCapture(ESP32_CAM_URL)
+if not cap.isOpened():
+    print(f"Failed to connect to ESP32-CAM stream at {ESP32_CAM_URL}")
+    exit(1)
+
+print("Connected to ESP32-CAM. Running detection...")
+
 # Begin inference loop
 while True:
 
