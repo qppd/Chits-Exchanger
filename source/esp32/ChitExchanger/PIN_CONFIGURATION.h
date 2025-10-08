@@ -13,8 +13,12 @@
 #define SERVO_SDA 21
 #define SERVO_SCL 22
 
+
 // Tactile Buttons
 #define LCD_BUTTON_PIN 8
 #define COIN_BUTTON_PIN 9
+
+// Piezo Buzzer
+#define BUZZER_PIN 12
 
 #endif // PIN_CONFIGURATION_H
