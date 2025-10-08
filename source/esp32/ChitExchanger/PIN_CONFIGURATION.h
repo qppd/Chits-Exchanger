@@ -4,7 +4,7 @@
 // Pin configuration for all components
 
 // Coin Slot
-#define coinPin 27
+#define coinPin 4
 
 // Bill Acceptor
 #define billPin 26
