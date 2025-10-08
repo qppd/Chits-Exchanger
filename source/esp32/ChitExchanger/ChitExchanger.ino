@@ -24,7 +24,7 @@ void setup() {
   displayMessage("Welcome!", 0); // Display a welcome message on the first row
 
   for (int i = 0; i < numOfInputs; i++) {
-    pinMode(inputPins[i], INPUT_PULLUP); // Initialize button pins as input with pull-up
+    //pinMode(inputPins[i], INPUT_PULLUP); // Initialize button pins as input with pull-up
   }
 }
 

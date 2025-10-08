@@ -4,8 +4,6 @@
 #include <Arduino.h>
 #include "PIN_CONFIGURATION.h"
 
-#undef billPin
-
 extern volatile bool billAccepted;
 extern volatile unsigned long billLastDebounceTime;
 extern const unsigned long billDebounceDelay;

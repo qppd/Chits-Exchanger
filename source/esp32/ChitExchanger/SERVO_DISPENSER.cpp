@@ -3,8 +3,6 @@
 // Initialize the PCA9685 object for PWM control
 Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver();
 
-const int SERVO_MIN = 150;  // Minimum pulse length for 0 degrees
-const int SERVO_MAX = 600;  // Maximum pulse length for 180 degrees
 
 // Function to initialize the PCA9685 for servo control
 void initSERVO() {
