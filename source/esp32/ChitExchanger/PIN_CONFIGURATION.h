@@ -19,6 +19,6 @@
 #define COIN_BUTTON_PIN 9
 
 // Piezo Buzzer
-#define BUZZER_PIN 12
+#define BUZZER_PIN 27
 
 #endif // PIN_CONFIGURATION_H
