@@ -50,9 +50,9 @@ void initSERVO() {
 
   delay(10);
   
-  // Stop all servos initially
+  // Deactivate all servo outputs (set PWM to 0)
   for (int i = 0; i < 4; i++) {
-    stopServo(i);
+    pwm.setPWM(i, 0, 0);
   }
   
   Serial.println("PCA9685 Initialized - 360° Servo Mode");
@@ -70,7 +70,8 @@ void setServoSpeed(int channel, int speed) {
 
 // Stop specific servo
 void stopServo(int channel) {
-  setServoSpeed(channel, SERVO_STOP);
+  // Fully deactivate servo output
+  pwm.setPWM(channel, 0, 0);
 }
 
 // Operate servo for a specific duration
