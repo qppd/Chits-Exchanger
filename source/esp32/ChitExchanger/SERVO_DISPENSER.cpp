@@ -3,7 +3,6 @@
 // Initialize the PCA9685 object for PWM control
 Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver();
 
-
 // Function to initialize the PCA9685 for servo control
 void initSERVO() {
   Wire.begin(21, 22);  // Initialize I2C with SDA on GPIO 21 and SCL on GPIO 22
@@ -11,13 +10,98 @@ void initSERVO() {
   pwm.setPWMFreq(50);  // Set PWM frequency to 50Hz for servos
 
   delay(10);
-  Serial.println("PCA9685 Initialized");
+  
+  // Stop all servos initially
+  for (int i = 0; i < 4; i++) {
+    stopServo(i);
+  }
+  
+  Serial.println("PCA9685 Initialized - 360° Servo Mode");
+  Serial.println("Servo channels 0-3 ready for card dispensing");
 }
 
-// Function to set servo to a specified angle
+// ========================================
+// NEW: 360-DEGREE SERVO TIMING FUNCTIONS
+// ========================================
+
+// Set servo speed/direction for 360-degree servo
+void setServoSpeed(int channel, int speed) {
+  pwm.setPWM(channel, 0, speed);
+}
+
+// Stop specific servo
+void stopServo(int channel) {
+  setServoSpeed(channel, SERVO_STOP);
+}
+
+// Operate servo for a specific duration
+void operateServoTimed(int channel, int direction, int duration) {
+  Serial.print("Operating servo channel ");
+  Serial.print(channel);
+  Serial.print(" for ");
+  Serial.print(duration);
+  Serial.println("ms");
+  
+  // Start servo rotation
+  setServoSpeed(channel, direction);
+  
+  // Wait for specified duration
+  delay(duration);
+  
+  // Stop servo
+  stopServo(channel);
+  
+  Serial.print("Servo channel ");
+  Serial.print(channel);
+  Serial.println(" stopped");
+}
+
+// Dispense card based on chit value
+void dispenseCard(int channel, int chitValue) {
+  int duration;
+  
+  // Get duration based on chit value
+  switch (chitValue) {
+    case 5:
+      duration = DISPENSE_DURATION_5;
+      break;
+    case 10:
+      duration = DISPENSE_DURATION_10;
+      break;
+    case 20:
+      duration = DISPENSE_DURATION_20;
+      break;
+    case 50:
+      duration = DISPENSE_DURATION_50;
+      break;
+    default:
+      Serial.println("Invalid chit value!");
+      return;
+  }
+  
+  Serial.print("Dispensing ₱");
+  Serial.print(chitValue);
+  Serial.print(" chit on channel ");
+  Serial.print(channel);
+  Serial.print(" for ");
+  Serial.print(duration);
+  Serial.println("ms");
+  
+  // Dispense card with forward rotation
+  operateServoTimed(channel, SERVO_FORWARD, duration);
+  
+  // Small delay between operations
+  delay(100);
+}
+
+// ========================================
+// LEGACY: ANGLE-BASED FUNCTIONS (COMPATIBILITY)
+// ========================================
+
+// Function to set servo to a specified angle (for standard servos)
 void setServoAngle(int channel, int angle) {
-  int pulseLen = map(angle, 0, 180, SERVO_MIN, SERVO_MAX);
-  pwm.setPWM(channel, 0, pulseLen);  // Set PWM pulse width to move servo to angle
+  int pulseLen = map(angle, 0, 180, 150, 600);  // Using original SERVO_MIN/MAX values
+  pwm.setPWM(channel, 0, pulseLen);
 }
 
 void repeatOperateSERVO(int channel, int startAngle, int endAngle, int speed, int repeatCount) {

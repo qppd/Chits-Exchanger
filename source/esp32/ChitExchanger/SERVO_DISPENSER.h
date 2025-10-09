@@ -8,11 +8,25 @@
 // Initialize the PCA9685 object for PWM control
 extern Adafruit_PWMServoDriver pwm;
 
-const int SERVO_MIN = 150;  // Minimum pulse length for 0 degrees
-const int SERVO_MAX = 600;  // Maximum pulse length for 180 degrees
+// 360-degree servo control constants
+const int SERVO_STOP = 375;        // PWM value for stopping 360-degree servo (1.5ms pulse)
+const int SERVO_FORWARD = 450;     // PWM value for forward rotation
+const int SERVO_BACKWARD = 300;    // PWM value for backward rotation
+
+// Timing variables for card dispensing (in milliseconds)
+const int DISPENSE_DURATION_5 = 500;   // Duration to dispense ₱5 chit (ms)
+const int DISPENSE_DURATION_10 = 600;  // Duration to dispense ₱10 chit (ms)
+const int DISPENSE_DURATION_20 = 700;  // Duration to dispense ₱20 chit (ms)
+const int DISPENSE_DURATION_50 = 800;  // Duration to dispense ₱50 chit (ms)
 
 // Function declarations
 void initSERVO();
+void setServoSpeed(int channel, int speed); // speed: SERVO_STOP, SERVO_FORWARD, SERVO_BACKWARD
+void operateServoTimed(int channel, int direction, int duration); // New timing-based function
+void dispenseCard(int channel, int chitValue); // Dispense specific chit value
+void stopServo(int channel); // Stop specific servo
+
+// Legacy angle-based functions (kept for compatibility)
 void setServoAngle(int channel, int angle);
 void operateSERVO(int channel, int startAngle, int endAngle, int speed);
 void repeatOperateSERVO(int channel, int startAngle, int endAngle, int speed, int repeatCount);

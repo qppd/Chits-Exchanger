@@ -5,7 +5,8 @@ int lastInputState[numOfInputs] = { HIGH, HIGH };
 bool inputFlags[numOfInputs] = { HIGH, HIGH };
 long lastDebounceTime[numOfInputs] = { 0, 0 };
 long debounceDelay = 10;
-const int inputPins[numOfInputs] = { LCD_BUTTON_PIN, COIN_BUTTON_PIN };
+// NOTE: Tactile button functionality removed - using dummy pins to avoid compilation errors
+const int inputPins[numOfInputs] = { 8, 9 }; // Dummy pins - not used anymore
 
 void setInputFlags() {
   for (int i = 0; i < numOfInputs; i++) {
