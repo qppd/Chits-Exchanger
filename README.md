@@ -166,6 +166,14 @@ The **IoT Chits Exchanger** is an intelligent, dual-platform automated currency 
 
 The TB74 is a professional bill acceptor module used for reliable bill validation and acceptance in automated vending and exchange systems. The included 3D model (`model/TB74.f3d`) and image (`model/TB74.png`) provide reference for hardware integration and enclosure design.
 
+### ALLAN Coin Slot Model
+
+<div align="center">
+    <img src="model/ALLAN_COINSLOT.png" alt="ALLAN Coin Slot Model" width="350"/>
+</div>
+
+The ALLAN Coin Slot is a professional-grade coin input module designed for high-accuracy coin detection and integration with ALLAN hoppers. The provided 3D model (`model/ALLAN_COINSLOT.f3d`) and image (`model/ALLAN_COINSLOT.png`) assist with hardware design and system assembly.
+
 ### Raspberry Pi Platform (Chits to Coins)
 
 | Component | Model/Type | Quantity | Function |
@@ -541,6 +549,8 @@ source/esp32/ChitExchanger/
 model/
 ├── TB74.f3d                     # TB74 bill acceptor 3D model (Fusion 360)
 ├── TB74.png                     # TB74 bill acceptor reference image
+├── ALLAN_COINSLOT.f3d           # ALLAN coin slot 3D model (Fusion 360)
+├── ALLAN_COINSLOT.png           # ALLAN coin slot reference image
 ```
 
 #### Raspberry Pi Platform (Chits to Coins)
