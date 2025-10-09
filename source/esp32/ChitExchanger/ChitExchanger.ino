@@ -11,6 +11,7 @@ const int buttonPin = 2;    // Pin for button input
 const int ledPin = 13;      // Pin for LED output
 
 int buttonState = 0;        // Variable for reading the button status
+int tb74Credit = 0;        // Variable to track TB74 credit
 
 void setup() {
   pinMode(ledPin, OUTPUT);      // Initialize the LED pin as an output
@@ -26,6 +27,9 @@ void setup() {
   for (int i = 0; i < numOfInputs; i++) {
     //pinMode(inputPins[i], INPUT_PULLUP); // Initialize button pins as input with pull-up
   }
+
+  // Play a tone to indicate setup is finished
+  playTone(1200, 300); // 1.2kHz tone for 300ms
 }
 
 void loop() {
@@ -46,15 +50,17 @@ void loop() {
     // Add any additional logic for coin insertion here
   }
 
-  if (billAccepted) {
-    playTone(1500, 300); // Play a 1.5kHz tone for 300ms
-    billAccepted = false; // Reset the flag
-    Serial.println("Bill accepted!");
-    // Add any additional logic for bill acceptance here
-  }
-
   setInputFlags(); // Check button states
   resolveInputFlags(); // Handle button actions
+
+    // Bill acceptor pulse counting and credit update
+    const int billValuePerPulse = 10; // 1 pulse = ₱10
+    if (pulseCount > 0 && (millis() - lastPulseTime > 250)) {
+      billCredit += pulseCount * billValuePerPulse;
+      Serial.print("Credit: ₱");
+      Serial.println(billCredit);
+      pulseCount = 0;
+    }
 
   // Example usage of the servo dispenser
   operateSERVO(0, 0, 90, 10); // Operate servo on channel 0 from 0 to 90 degrees

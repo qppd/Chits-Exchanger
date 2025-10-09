@@ -1,22 +1,20 @@
 #include "BILL_ACCEPTOR.h"
 
-volatile bool billAccepted = false;
-volatile unsigned long billLastDebounceTime = 0;
-const unsigned long billDebounceDelay = 100; // debounce delay in ms
 
-void IRAM_ATTR ITRBILL() {
-  if (digitalRead(billPin) == LOW) {
-    unsigned long billCurrentTime = millis();
-    if ((billCurrentTime - billLastDebounceTime) > billDebounceDelay) {
-      if (digitalRead(billPin) == LOW) {
-        billAccepted = true;
-        billLastDebounceTime = billCurrentTime;
-      }
-    }
+volatile unsigned int pulseCount = 0;
+unsigned int billCredit = 0;
+unsigned long lastPulseTime = 0;
+const unsigned long pulseDebounce = 50; // ms debounce
+
+void IRAM_ATTR billPulseISR() {
+  unsigned long currentTime = millis();
+  if (currentTime - lastPulseTime > pulseDebounce) {
+    pulseCount++;
+    lastPulseTime = currentTime;
   }
 }
 
 void initBILLACCEPTOR() {
   pinMode(billPin, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(billPin), ITRBILL, FALLING);
+  attachInterrupt(digitalPinToInterrupt(billPin), billPulseISR, FALLING);
 }
