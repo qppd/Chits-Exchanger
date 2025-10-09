@@ -20,6 +20,7 @@ const int DISPENSE_DURATION_20 = 700;  // Duration to dispense ₱20 chit (ms)
 const int DISPENSE_DURATION_50 = 800;  // Duration to dispense ₱50 chit (ms)
 
 // Function declarations
+void scanI2CDevices(); // I2C device scanner for debugging
 void initSERVO();
 void setServoSpeed(int channel, int speed); // speed: SERVO_STOP, SERVO_FORWARD, SERVO_BACKWARD
 void operateServoTimed(int channel, int direction, int duration); // New timing-based function

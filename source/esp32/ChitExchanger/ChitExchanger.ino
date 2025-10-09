@@ -43,10 +43,16 @@ void setup() {
   pinMode(ledPin, OUTPUT);      // Initialize the LED pin as an output
   Serial.begin(9600);           // Start serial communication
   
+  // Initialize I2C bus ONCE for all devices
+  Serial.println("Initializing I2C bus...");
+  Wire.begin(21, 22);  // SDA = GPIO 21, SCL = GPIO 22
+  Serial.println("I2C initialized on SDA=21, SCL=22");
+  
+  // Initialize components (I2C already initialized)
   initALLANCOIN(); // Initialize coin slot interrupt
-  initSERVO(); // Initialize servo dispenser (PCA9685)
+  initSERVO(); // Initialize servo dispenser (PCA9685 at 0x40)
   initBILLACCEPTOR(); // Initialize bill acceptor interrupt
-  initLCD(); // Initialize the LCD
+  initLCD(); // Initialize the LCD (at 0x27)
   initBuzzer(); // Initialize the buzzer
   
   displayMessage("Welcome!", 0); // Display a welcome message on the first row

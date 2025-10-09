@@ -3,9 +3,48 @@
 // Initialize the PCA9685 object for PWM control
 Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver();
 
+// I2C device scanner for debugging
+void scanI2CDevices() {
+  Serial.println("Scanning I2C bus for devices...");
+  int deviceCount = 0;
+  
+  for (int address = 1; address < 127; address++) {
+    Wire.beginTransmission(address);
+    int error = Wire.endTransmission();
+    
+    if (error == 0) {
+      Serial.print("I2C device found at address 0x");
+      if (address < 16) Serial.print("0");
+      Serial.print(address, HEX);
+      
+      // Identify common devices
+      if (address == 0x27 || address == 0x3F) {
+        Serial.println(" (LCD Display)");
+      } else if (address == 0x40) {
+        Serial.println(" (PCA9685 Servo Driver)");
+      } else {
+        Serial.println(" (Unknown device)");
+      }
+      deviceCount++;
+    }
+  }
+  
+  if (deviceCount == 0) {
+    Serial.println("No I2C devices found!");
+  } else {
+    Serial.print("Found ");
+    Serial.print(deviceCount);
+    Serial.println(" I2C device(s)");
+  }
+}
+
 // Function to initialize the PCA9685 for servo control
 void initSERVO() {
-  Wire.begin(21, 22);  // Initialize I2C with SDA on GPIO 21 and SCL on GPIO 22
+  // I2C is already initialized in main setup()
+  
+  // Scan for I2C devices
+  scanI2CDevices();
+  
   pwm.begin();
   pwm.setPWMFreq(50);  // Set PWM frequency to 50Hz for servos
 
