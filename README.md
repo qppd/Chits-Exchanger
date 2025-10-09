@@ -66,9 +66,11 @@ The **IoT Chits Exchanger** is an intelligent, dual-platform automated currency 
   - Support for various bill denominations
 
 ### 🤖 Automated Dispensing (ESP32 Platform)
-- **🎯 Servo-Controlled Chit Dispenser**
-  - PCA9685 PWM driver for precise control
-- Repeat dispensing capability
+ - **🎯 Servo-Controlled Chit Dispenser**
+     - PCA9685 PWM driver for precise control of 360-degree servos
+     - Servo outputs are fully deactivated (PWM=0) after initialization and after dispensing, preventing unwanted movement
+     - Legacy angle-based functions are retained for compatibility with standard servos
+     - Repeat dispensing capability
 
 ### 🤖 AI-Powered Chit Recognition (Raspberry Pi Platform)
 - **📸 YOLOv11 Computer Vision System**
