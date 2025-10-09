@@ -158,6 +158,14 @@ The **IoT Chits Exchanger** is an intelligent, dual-platform automated currency 
 | **Piezo Buzzer** | 5V Active Buzzer | 1 | Audio feedback |
 | **Power Supply** | 5V/12V Dual Rail | 1 | System power |
 
+### TB74 Bill Acceptor Model
+
+<div align="center">
+    <img src="model/TB74.png" alt="TB74 Bill Acceptor Model" width="350"/>
+</div>
+
+The TB74 is a professional bill acceptor module used for reliable bill validation and acceptance in automated vending and exchange systems. The included 3D model (`model/TB74.f3d`) and image (`model/TB74.png`) provide reference for hardware integration and enclosure design.
+
 ### Raspberry Pi Platform (Chits to Coins)
 
 | Component | Model/Type | Quantity | Function |
@@ -530,6 +538,9 @@ source/esp32/ChitExchanger/
 ├──  PIEZO_BUZZER.h/.cpp        # Audio feedback system
 ├── ⚙️ PIN_CONFIGURATION.h        # Centralized pin definitions
 └── 🌐 WIFI_COMMUNICATION.h/.cpp  # WiFi bridge to Raspberry Pi
+model/
+├── TB74.f3d                     # TB74 bill acceptor 3D model (Fusion 360)
+├── TB74.png                     # TB74 bill acceptor reference image
 ```
 
 #### Raspberry Pi Platform (Chits to Coins)
