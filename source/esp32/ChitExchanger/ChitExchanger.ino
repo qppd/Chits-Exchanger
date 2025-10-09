@@ -55,12 +55,28 @@ void loop() {
 
     // Bill acceptor pulse counting and credit update
     const int billValuePerPulse = 10; // 1 pulse = ₱10
-    if (pulseCount > 0 && (millis() - lastPulseTime > 250)) {
-      billCredit += pulseCount * billValuePerPulse;
-      Serial.print("Credit: ₱");
-      Serial.println(billCredit);
-      pulseCount = 0;
-    }
+
+      // Show 'Counting...' while pulses are being received
+      if (pulseCount > 0 && (millis() - lastPulseTime <= 250)) {
+        displayMessage("Counting...", 1); // Row 1: status
+        char creditMsg[21];
+        snprintf(creditMsg, sizeof(creditMsg), "CREDIT: ₱%d", billCredit + pulseCount * billValuePerPulse);
+        displayMessage(creditMsg, 2); // Row 2: live credit
+      }
+      // When counting is done, show final credit
+      else if (pulseCount > 0 && (millis() - lastPulseTime > 250)) {
+        billCredit += pulseCount * billValuePerPulse;
+        Serial.print("Credit: ₱");
+        Serial.println(billCredit);
+        pulseCount = 0;
+        displayMessage("CREDIT", 1); // Row 1: label
+        char creditMsg[21];
+        snprintf(creditMsg, sizeof(creditMsg), "₱%d", billCredit);
+        int padding = 20 - strlen(creditMsg); // Right-align
+        char formattedMsg[21];
+        snprintf(formattedMsg, sizeof(formattedMsg), "%*s", 20, creditMsg);
+        displayMessage(formattedMsg, 2); // Row 2: value
+      }
 
   // Example usage of the servo dispenser
   operateSERVO(0, 0, 90, 10); // Operate servo on channel 0 from 0 to 90 degrees
