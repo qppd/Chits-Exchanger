@@ -1,6 +1,4 @@
-**LCD Power**: 5V/0.5A for 20x4 I2C LCD
-**Buzzer Power**: 5V/0.1A for piezo buzzer
-# 🎰 IoT Chits Exchanger
+# IoT Chits Exchanger
 
 <div align="center">
   <img src="diagram/Peso_Bill_To_Chit.png" alt="Chits Exchanger Wiring Diagram" width="600"/>
@@ -11,37 +9,37 @@
   [![Arduino](https://img.shields.io/badge/Framework-Arduino-teal.svg)](https://www.arduino.cc/)
 </div>
 
-## 📋 Table of Contents
-- [Overview](#-overview)
-- [Features](#-features)
-- [Hardware Components](#-hardware-components)
-- [System Architecture](#-system-architecture)
-- [Pin Configuration](#-pin-configuration)
-- [Software Architecture](#-software-architecture)
-- [Installation](#-installation)
-- [Usage](#-usage)
-- [Hardware Setup](#-hardware-setup)
-- [Development Progress](#-development-progress)
-- [API Reference](#-api-reference)
-- [Troubleshooting](#-troubleshooting)
-- [Contributing](#-contributing)
-- [License](#-license)
-- [Contact & Support](#-contact--support)
+## Table of Contents
+- [Overview](#overview)
+- [Features](#features)
+- [Hardware Components](#hardware-components)
+- [System Architecture](#system-architecture)
+- [Pin Configuration](#pin-configuration)
+- [Software Architecture](#software-architecture)
+- [Installation](#installation)
+- [Usage](#usage)
+- [Hardware Setup](#hardware-setup)
+- [Development Progress](#development-progress)
+- [API Reference](#api-reference)
+- [Troubleshooting](#troubleshooting)
+- [Contributing](#contributing)
+- [License](#license)
+- [Contact & Support](#contact--support)
 
-## 🎯 Overview
+## Overview
 
 The **IoT Chits Exchanger** is an intelligent, dual-platform automated currency exchange system that provides bidirectional conversion between physical currency and digital chits/tokens. This comprehensive solution combines ESP32 microcontroller technology with Raspberry Pi-based computer vision for complete automation of currency exchange operations.
 
-### 🔧 Core Functionality
+### Core Functionality
 
-#### 💰 **Cash to Chits (ESP32 Platform)**
+#### Cash to Chits (ESP32 Platform)
 - **Automated Currency Processing**: Real-time detection and validation of coins and bills
 - **Smart Dispensing System**: Precise chit/token dispensing with servo-controlled mechanisms
 - **Interactive User Interface**: 20x4 LCD display with tactile button controls
 - **Audio Feedback**: Piezo buzzer for user interaction confirmation
 - **Real-time Monitoring**: Serial communication for system diagnostics and logging
 
-#### 🎯 **Chits to Coins (Raspberry Pi + AI Platform)**
+#### Chits to Coins (Raspberry Pi + AI Platform)
 - **Computer Vision Processing**: YOLOv11-powered object detection and classification
 - **Intelligent Chit Recognition**: Advanced AI recognition of 5, 10, 20, and 50 peso chits
 - **Automated Chit Insertion**: Servo-controlled chit feeding mechanism
@@ -50,44 +48,44 @@ The **IoT Chits Exchanger** is an intelligent, dual-platform automated currency 
 - **Real-time Image Processing**: GPU-accelerated inference for instant recognition
 - **Change Management**: Intelligent coin dispensing for chit-to-coin conversion
 
-## ✨ Features
+## Features
 
-### 💰 Currency Input Systems (ESP32 Platform)
-- **🪙 Advanced Coin Slot**
+### Currency Input Systems (ESP32 Platform)
+- **Advanced Coin Slot**
   - Interrupt-based detection with 50ms debounce logic
   - Support for multiple coin denominations
   - Anti-fraud pulse validation
   - Real-time coin counting and value calculation
 
-- **💵 Professional Bill Acceptor**
+- **Professional Bill Acceptor**
   - TB74 pulse logic integration
   - 100ms debounce for reliable detection
   - Bill validation and authentication
   - Support for various bill denominations
 
-### 🤖 Automated Dispensing (ESP32 Platform)
- - **🎯 Servo-Controlled Chit Dispenser**
+### Automated Dispensing (ESP32 Platform)
+ - **Servo-Controlled Chit Dispenser**
      - PCA9685 PWM driver for precise control of 360-degree servos
      - Servo outputs are fully deactivated (PWM=0) after initialization and after dispensing, preventing unwanted movement
      - Legacy angle-based functions are retained for compatibility with standard servos
      - Repeat dispensing capability
 
-### 🤖 AI-Powered Chit Recognition (Raspberry Pi Platform)
-- **📸 YOLOv11 Computer Vision System**
+### AI-Powered Chit Recognition (Raspberry Pi Platform)
+- **YOLOv11 Computer Vision System**
   - Real-time object detection and classification
   - Custom-trained model for Philippine peso chits (5, 10, 20, 50)
   - 99.5%+ accuracy in chit denomination recognition
   - Sub-second processing time for instant verification
   - GPU acceleration support (NVIDIA Jetson compatible)
 
-- **🎯 Intelligent Chit Processing**
+- **Intelligent Chit Processing**
   - Automated chit insertion via servo mechanism
   - High-resolution camera scanning (1080p minimum)
   - Multi-angle validation for authenticity verification
   - Error detection and rejection for invalid chits
   - Real-time confidence scoring and validation
 
-- **🔄 Dual Coin Hopper System**
+- **Dual Coin Hopper System**
   - Standard coin hopper for basic dispensing (migrated from ESP32)
   - ALLAN professional hoppers for high-volume operations
   - Motor-driven dispensing with optical sensor feedback
@@ -95,7 +93,7 @@ The **IoT Chits Exchanger** is an intelligent, dual-platform automated currency 
   - Multi-denomination support with optimal coin combinations
   - Real-time confidence scoring and validation
 
-- **💰 ALLAN Coin Hopper Integration**
+- **ALLAN Coin Hopper Integration**
   - Professional-grade coin dispensing system
   - Support for multiple coin denominations
   - Precise coin counting and validation
@@ -103,48 +101,46 @@ The **IoT Chits Exchanger** is an intelligent, dual-platform automated currency 
   - High-capacity coin storage (500+ coins per denomination)
   - Serial communication protocol for Raspberry Pi control
 
-### 💻 User Interface Systems
-- **📺 ESP32 - 20x4 I2C LCD Display**
+### User Interface Systems
+- **ESP32 - 20x4 I2C LCD Display**
   - Real-time transaction information
   - Multi-language support capability
   - Custom message display
   - System status indicators
 
-
-
-- **🎮 Tactile Control Interface**
+- **Tactile Control Interface**
   - Debounced button inputs for reliability
   - LCD control button for menu navigation
   - Coin dispensing button for manual operations
   - Emergency stop functionality
 
-### 🔊 Audio Feedback Systems
-- **🔔 ESP32 Piezo Buzzer Integration**
+### Audio Feedback Systems
+- **ESP32 Piezo Buzzer Integration**
   - Configurable tone frequencies (1kHz for coins, 1.5kHz for bills)
   - Variable duration audio feedback
   - System status audio indicators
   - Error notification sounds
 
-- **🔈 Raspberry Pi Audio System**
+- **Raspberry Pi Audio System**
   - High-quality speaker output
   - Voice prompts for chit insertion guidance
   - Success/failure audio notifications
   - Multilingual audio support
 
-### 🌐 Connectivity & Communication
-- **📡 Inter-System Communication**
+### Connectivity & Communication
+- **Inter-System Communication**
   - ESP32 ↔ Raspberry Pi serial/WiFi communication
   - Real-time status synchronization
   - Centralized transaction logging
   - Remote monitoring capabilities
 
-- **🌍 Network Integration**
+- **Network Integration**
   - WiFi connectivity for both platforms
   - Cloud-based transaction logging
   - Remote system monitoring and diagnostics
   - OTA (Over-The-Air) firmware updates
 
-## 🔧 Hardware Components
+## Hardware Components
 
 <div align="center">
 
@@ -180,7 +176,7 @@ The **IoT Chits Exchanger** is an intelligent, dual-platform automated currency 
 
 </div>
 
-### 📐 Physical Specifications
+### Physical Specifications
 
 #### ESP32 Platform
 - **Operating Voltage**: 5V-12V DC
@@ -199,7 +195,7 @@ The **IoT Chits Exchanger** is an intelligent, dual-platform automated currency 
 - **Memory**: 4GB+ LPDDR4 RAM
 - **Storage**: 32GB+ microSD
 
-### 🔧 ALLAN Coin Hopper Specifications
+### ALLAN Coin Hopper Specifications
 
 #### ALLAN CH-926 Series Details
 - **Capacity**: 500-700 coins per hopper
@@ -229,7 +225,7 @@ Common Commands:
 - 0x35: Reset hopper
 ```
 
-### 📷 Camera System Specifications
+### Camera System Specifications
 
 #### Hardware Requirements
 - **Resolution**: Minimum 1920x1080 (Full HD)
@@ -246,7 +242,7 @@ Common Commands:
 - **Coverage**: Even illumination across scanning area
 - **Power**: 12V LED strips with dimming capability
 
-## 🏗️ System Architecture
+## System Architecture
 
 ### Dual-Platform Architecture Overview
 
@@ -256,28 +252,28 @@ Common Commands:
 </div>
 
 ```
-🏢 COMPLETE SYSTEM ARCHITECTURE
-├── 💰 ESP32 Platform (Cash → Chits)
-│   ├── 🪙 Coin Slot (GPIO 27)
-│   ├── 💵 Bill Acceptor (GPIO 26)
-│   ├── 🤖 PCA9685 PWM Driver (I2C)
-│   ├── 📺 20x4 LCD Display (I2C)
-│   ├── 🎮 Control Buttons (GPIO 8, 9)
-│   └── 🔊 Piezo Buzzer (GPIO 12)
+COMPLETE SYSTEM ARCHITECTURE
+├── ESP32 Platform (Cash → Chits)
+│   ├── Coin Slot (GPIO 27)
+│   ├── Bill Acceptor (GPIO 26)
+│   ├── PCA9685 PWM Driver (I2C)
+│   ├── 20x4 LCD Display (I2C)
+│   ├── Control Buttons (GPIO 8, 9)
+│   └── Piezo Buzzer (GPIO 12)
 │
-└── 🤖 Raspberry Pi Platform (Chits → Coins)
-    ├── 📸 Camera System (USB/CSI)
-    ├── 🎯 Chit Insertion Servo (GPIO 18)
-    ├── 💡 LED Lighting System (GPIO 19)
-        ├── 🖥️ Touch Display (HDMI + USB)
-    ├── 🔈 Audio System (3.5mm/USB)
-    ├── 🔄 Standard Coin Hopper (GPIO 20, 21)
-    ├── 💰 ALLAN Coin Hoppers (4x Serial)
+└── Raspberry Pi Platform (Chits → Coins)
+    ├── Camera System (USB/CSI)
+    ├── Chit Insertion Servo (GPIO 18)
+    ├── LED Lighting System (GPIO 19)
+        ├── Touch Display (HDMI + USB)
+    ├── Audio System (3.5mm/USB)
+    ├── Standard Coin Hopper (GPIO 20, 21)
+    ├── ALLAN Coin Hoppers (4x Serial)
     │   ├── 1 Peso Hopper (USB-Serial 1)
     │   ├── 5 Peso Hopper (USB-Serial 2)
     │   ├── 10 Peso Hopper (USB-Serial 3)
     │   └── 20 Peso Hopper (USB-Serial 4)
-    └── 🌐 WiFi Communication Bridge
+    └── WiFi Communication Bridge
 ```
     ├── 💰 ALLAN Coin Hoppers (4x Serial)
     │   ├── 5 Peso Hopper (USB-Serial 1)
