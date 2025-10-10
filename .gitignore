@@ -20,7 +20,8 @@ __pycache__/
 # Fritzing
 *.fzz
 # Images
-*.png
+# (Allow model/TB74.png to be tracked)
+!model/TB74.png
 # Model files
 *.pt
 *.torchscript
