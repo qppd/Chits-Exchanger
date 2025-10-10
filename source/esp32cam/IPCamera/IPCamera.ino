@@ -35,9 +35,22 @@ bool wifi_connected = false;
 #define HREF_GPIO_NUM     23
 #define PCLK_GPIO_NUM     22
 
+// Flash LED pin (built-in LED on most ESP32-CAM modules)
+#define FLASH_LED_PIN     4
+
+// Flash LED state
+bool flashState = true; // Start with flash on
+
 WiFiServer server(80);
 
 void startCameraServer();
+
+// Flash control functions
+void setFlashState(bool state) {
+  flashState = state;
+  digitalWrite(FLASH_LED_PIN, state ? HIGH : LOW);
+  Serial.println("Flash LED " + String(state ? "ON" : "OFF"));
+}
 
 void setup() {
   Serial.begin(115200);
@@ -72,6 +85,12 @@ void setup() {
     Serial.printf("Camera init failed with error 0x%x", err);
     return;
   }
+
+  // Initialize flash LED at full brightness
+  pinMode(FLASH_LED_PIN, OUTPUT);
+  digitalWrite(FLASH_LED_PIN, LOW); // Turn off
+  flashState = false;
+  Serial.println("Flash LED initialized at off state");
 
   // WiFiManager: Try to connect to saved WiFi, else start AP config portal
   WiFiManager wifiManager;
@@ -114,7 +133,35 @@ void handleStreamRequest() {
     String request = client.readStringUntil('\r');
     client.flush();
     
-    if (request.indexOf("/stream") != -1) {
+    // Handle flash control requests
+    if (request.indexOf("/flash/on") != -1) {
+      setFlashState(true);
+      client.println("HTTP/1.1 200 OK");
+      client.println("Content-Type: application/json");
+      client.println("Access-Control-Allow-Origin: *");
+      client.println();
+      client.println("{\"status\":\"success\",\"flash\":\"on\"}");
+    } else if (request.indexOf("/flash/off") != -1) {
+      setFlashState(false);
+      client.println("HTTP/1.1 200 OK");
+      client.println("Content-Type: application/json");
+      client.println("Access-Control-Allow-Origin: *");
+      client.println();
+      client.println("{\"status\":\"success\",\"flash\":\"off\"}");
+    } else if (request.indexOf("/flash/toggle") != -1) {
+      setFlashState(!flashState);
+      client.println("HTTP/1.1 200 OK");
+      client.println("Content-Type: application/json");
+      client.println("Access-Control-Allow-Origin: *");
+      client.println();
+      client.println("{\"status\":\"success\",\"flash\":\"" + String(flashState ? "on" : "off") + "\"}");
+    } else if (request.indexOf("/flash/status") != -1) {
+      client.println("HTTP/1.1 200 OK");
+      client.println("Content-Type: application/json");
+      client.println("Access-Control-Allow-Origin: *");
+      client.println();
+      client.println("{\"status\":\"success\",\"flash\":\"" + String(flashState ? "on" : "off") + "\"}");
+    } else if (request.indexOf("/stream") != -1) {
       client.println("HTTP/1.1 200 OK");
       client.println("Content-Type: multipart/x-mixed-replace; boundary=frame");
       client.println("Connection: close");
@@ -139,13 +186,16 @@ void handleStreamRequest() {
         delay(30); // ~30 FPS
       }
     } else if (request.indexOf("/") != -1) {
-      // Send HTML page
+      // Send HTML page with flash controls
       client.println("HTTP/1.1 200 OK");
       client.println("Content-Type: text/html");
       client.println();
       client.println("<!DOCTYPE html><html><head><title>ESP32-CAM Stream</title></head>");
       client.println("<body><h1>ESP32-CAM Live Stream</h1>");
-      client.println("<img src='/stream' style='width:100%; max-width:800px;'>");
+      client.println("<img src='/stream' style='width:100%; max-width:800px;'><br>");
+      client.println("<button onclick=\"fetch('/flash/on')\">Flash ON</button>");
+      client.println("<button onclick=\"fetch('/flash/off')\">Flash OFF</button>");
+      client.println("<button onclick=\"fetch('/flash/toggle')\">Toggle Flash</button>");
       client.println("</body></html>");
     }
     client.stop();
