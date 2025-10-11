@@ -1,0 +1,5 @@
+# Requirements for Raspberry Pi 4B Chit Exchanger System
+tensorflow-lite-runtime==2.8.0
+opencv-python==4.5.5.64
+numpy==1.21.6
+RPi.GPIO==0.7.1
