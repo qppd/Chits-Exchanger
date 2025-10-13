@@ -6,16 +6,17 @@
  * and coin dispensing functionality for the ALLAN coin hopper.
  */
 
-#include "COIN_HOPPER.h"
 #include "PIN_CONFIGURATION.h"
+#include "COIN_HOPPER.h"
 
 // Static member initialization
-COIN_HOPPER* COIN_HOPPER::instance = nullptr;
-COIN_HOPPER* g_coinHopperInstance = nullptr;
+COIN_HOPPER* COIN_HOPPER::instances[3] = {nullptr, nullptr, nullptr};
+COIN_HOPPER* g_coinHopperInstances[3] = {nullptr, nullptr, nullptr};
 
-// Constructor
+// Default Constructor
 COIN_HOPPER::COIN_HOPPER() {
-    pulsePin = COIN_HOPPER_PULSE_PIN;
+    pulsePin = COIN_HOPPER_1_PULSE_PIN;
+    hopperId = 0; // Default to hopper 1
     pulseCount = 0;
     lastPulseTime = 0;
     lastDebounceTime = 0;
@@ -32,41 +33,110 @@ COIN_HOPPER::COIN_HOPPER() {
     for (int i = 0; i < 10; i++) {
         pulseRateBuffer[i] = 0;
     }
+}
+
+// Constructor with hopper ID
+COIN_HOPPER::COIN_HOPPER(int hopperIdNumber) {
+    hopperId = hopperIdNumber;
     
-    // Set static instance for interrupt handling
-    instance = this;
-    g_coinHopperInstance = this;
+    // Set default pin based on hopper ID
+    switch(hopperId) {
+        case 0: pulsePin = COIN_HOPPER_1_PULSE_PIN; break;
+        case 1: pulsePin = COIN_HOPPER_2_PULSE_PIN; break;
+        case 2: pulsePin = COIN_HOPPER_3_PULSE_PIN; break;
+        default: pulsePin = COIN_HOPPER_1_PULSE_PIN; hopperId = 0; break;
+    }
+    
+    pulseCount = 0;
+    lastPulseTime = 0;
+    lastDebounceTime = 0;
+    pulseRateIndex = 0;
+    lastRateCalculation = 0;
+    isInitialized = false;
+    isDispensing = false;
+    dispensingStartTime = 0;
+    targetDispenseCount = 0;
+    totalCoinsDetected = 0;
+    currentPulseRate = 0.0;
+    
+    // Initialize pulse rate buffer
+    for (int i = 0; i < 10; i++) {
+        pulseRateBuffer[i] = 0;
+    }
 }
 
 // Initialization methods
 bool COIN_HOPPER::begin() {
-    return begin(COIN_HOPPER_PULSE_PIN);
+    return begin(pulsePin, hopperId);
 }
 
 bool COIN_HOPPER::begin(int pulsePinNumber) {
+    return begin(pulsePinNumber, hopperId);
+}
+
+bool COIN_HOPPER::begin(int pulsePinNumber, int hopperIdNumber) {
     pulsePin = pulsePinNumber;
+    hopperId = hopperIdNumber;
+    
+    // Validate hopper ID
+    if (hopperId < 0 || hopperId >= 3) {
+        Serial.print("ERROR: Invalid hopper ID ");
+        Serial.println(hopperId);
+        return false;
+    }
+    
+    // Store instance in static array for interrupt handling
+    instances[hopperId] = this;
+    g_coinHopperInstances[hopperId] = this;
     
     // Configure pulse pin as input with pull-up
     pinMode(pulsePin, INPUT_PULLUP);
     
-    // Attach interrupt for falling edge detection
-    attachInterrupt(digitalPinToInterrupt(pulsePin), pulseISR, FALLING);
+    // Attach appropriate interrupt based on hopper ID
+    switch(hopperId) {
+        case 0:
+            attachInterrupt(digitalPinToInterrupt(pulsePin), pulseISR_Hopper1, FALLING);
+            break;
+        case 1:
+            attachInterrupt(digitalPinToInterrupt(pulsePin), pulseISR_Hopper2, FALLING);
+            break;
+        case 2:
+            attachInterrupt(digitalPinToInterrupt(pulsePin), pulseISR_Hopper3, FALLING);
+            break;
+        default:
+            Serial.println("ERROR: No ISR available for this hopper ID");
+            return false;
+    }
     
     // Initialize timing
     lastRateCalculation = millis();
     
     isInitialized = true;
     
-    Serial.print("COIN_HOPPER initialized on GPIO");
+    Serial.print("COIN_HOPPER ");
+    Serial.print(hopperId + 1);
+    Serial.print(" initialized on GPIO");
     Serial.println(pulsePin);
     
     return true;
 }
 
-// Static interrupt service routine
-void IRAM_ATTR COIN_HOPPER::pulseISR() {
-    if (instance != nullptr) {
-        instance->handlePulseInterrupt();
+// Static interrupt service routines for each hopper
+void IRAM_ATTR COIN_HOPPER::pulseISR_Hopper1() {
+    if (instances[0] != nullptr) {
+        instances[0]->handlePulseInterrupt();
+    }
+}
+
+void IRAM_ATTR COIN_HOPPER::pulseISR_Hopper2() {
+    if (instances[1] != nullptr) {
+        instances[1]->handlePulseInterrupt();
+    }
+}
+
+void IRAM_ATTR COIN_HOPPER::pulseISR_Hopper3() {
+    if (instances[2] != nullptr) {
+        instances[2]->handlePulseInterrupt();
     }
 }
 
@@ -260,6 +330,14 @@ void COIN_HOPPER::setPulsePin(int pin) {
         return;
     }
     pulsePin = pin;
+}
+
+int COIN_HOPPER::getHopperId() const {
+    return hopperId;
+}
+
+int COIN_HOPPER::getPulsePin() const {
+    return pulsePin;
 }
 
 // Diagnostics

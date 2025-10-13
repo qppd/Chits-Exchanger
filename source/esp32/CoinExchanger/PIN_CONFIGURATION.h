@@ -18,8 +18,16 @@
 
 // ===== COIN HOPPER PIN DEFINITIONS =====
 
-// ALLAN Coin Hopper - Pulse Detection Pin
-#define COIN_HOPPER_PULSE_PIN    19      // GPIO19 - Connected to hopper Pin 2
+// ALLAN Coin Hoppers - Pulse Detection Pins (3 hoppers)
+#define COIN_HOPPER_1_PULSE_PIN  19      // GPIO19 - Hopper 1 pulse signal
+#define COIN_HOPPER_2_PULSE_PIN  18      // GPIO18 - Hopper 2 pulse signal  
+#define COIN_HOPPER_3_PULSE_PIN  4       // GPIO4  - Hopper 3 pulse signal
+
+// Legacy definition for backward compatibility
+#define COIN_HOPPER_PULSE_PIN    COIN_HOPPER_1_PULSE_PIN
+
+// Total number of coin hoppers
+#define NUM_COIN_HOPPERS         3
 
 // Additional GPIO pins that might be used for future expansion
 #define COIN_HOPPER_ENABLE_PIN   -1      // Not used in current configuration

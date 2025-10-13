@@ -19,17 +19,20 @@
 #include "PIN_CONFIGURATION.h"
 #include "COIN_HOPPER.h"
 
-// Global variables
-COIN_HOPPER coinHopper;
+// Global variables - 3 Coin Hoppers
+COIN_HOPPER coinHopper1(0);  // Hopper 1 - GPIO19
+COIN_HOPPER coinHopper2(1);  // Hopper 2 - GPIO18
+COIN_HOPPER coinHopper3(2);  // Hopper 3 - GPIO4
+
 unsigned long lastSerialOutput = 0;
 const unsigned long SERIAL_OUTPUT_INTERVAL = 100; // Output every 100ms for real-time
-unsigned long lastCoinCount = 0;
+unsigned long lastCoinCount[NUM_COIN_HOPPERS] = {0, 0, 0};
 bool realTimeMode = true;
 
 // RPi Communication variables
 bool countingActive = false;
 bool rpiMode = false;
-unsigned long sessionStartCount = 0;
+unsigned long sessionStartCount[NUM_COIN_HOPPERS] = {0, 0, 0};
 unsigned long sessionStartTime = 0;
 String inputBuffer = "";
 
@@ -50,13 +53,22 @@ void setup() {
   }
   
   Serial.println("=== ESP32 Coin Exchanger System ===");
-  Serial.println("Initializing ALLAN Coin Hopper...");
+  Serial.println("Initializing 3 ALLAN Coin Hoppers...");
   
-  // Initialize coin hopper
-  coinHopper.begin();
+  // Initialize all 3 coin hoppers
+  bool allInitialized = true;
+  allInitialized &= coinHopper1.begin(COIN_HOPPER_1_PULSE_PIN, 0);
+  allInitialized &= coinHopper2.begin(COIN_HOPPER_2_PULSE_PIN, 1);
+  allInitialized &= coinHopper3.begin(COIN_HOPPER_3_PULSE_PIN, 2);
+  
+  if (allInitialized) {
+    Serial.println("✅ All 3 coin hoppers initialized successfully!");
+  } else {
+    Serial.println("❌ Error initializing one or more coin hoppers!");
+  }
   
   Serial.println("System ready!");
-  Serial.println("Coin hopper is monitoring for pulses...");
+  Serial.println("All coin hoppers are monitoring for pulses...");
   Serial.println("Commands:");
   Serial.println("  Manual: 'count', 'reset', 'dispense X', 'realtime on/off'");
   Serial.println("  RPi: 'START_COUNT', 'STOP_COUNT', 'GET_COUNT', 'GET_STATUS'");
@@ -71,51 +83,68 @@ void loop() {
   // Handle serial commands
   handleSerialCommands();
   
-  // Real-time coin counting display
-  unsigned long currentCoinCount = coinHopper.getTotalCoins();
+  // Check all 3 coin hoppers for new coins
+  COIN_HOPPER* hoppers[] = {&coinHopper1, &coinHopper2, &coinHopper3};
   
-  // Check if there's a new coin detected
-  if (currentCoinCount != lastCoinCount) {
-    // Send coin event to RPi if in RPi mode and counting is active
-    if (rpiMode && countingActive) {
-      sendCoinEvent(currentCoinCount);
-    }
+  for (int i = 0; i < NUM_COIN_HOPPERS; i++) {
+    unsigned long currentCoinCount = hoppers[i]->getTotalCoins();
     
-    // Show manual mode display
-    if (realTimeMode && !rpiMode) {
-      Serial.print("💰 COIN #");
-      Serial.print(currentCoinCount);
-      Serial.print(" detected! [Rate: ");
-      Serial.print(coinHopper.getPulseRate(), 1);
-      Serial.print(" coins/sec] [Time: ");
-      Serial.print(millis());
-      Serial.println("ms]");
+    // Check if there's a new coin detected on this hopper
+    if (currentCoinCount != lastCoinCount[i]) {
+      // Send coin event to RPi if in RPi mode and counting is active
+      if (rpiMode && countingActive) {
+        sendCoinEvent(i + 1, currentCoinCount);
+      }
+      
+      // Show manual mode display
+      if (realTimeMode && !rpiMode) {
+        Serial.print("💰 HOPPER ");
+        Serial.print(i + 1);
+        Serial.print(" - COIN #");
+        Serial.print(currentCoinCount);
+        Serial.print(" detected! [Rate: ");
+        Serial.print(hoppers[i]->getPulseRate(), 1);
+        Serial.print(" coins/sec] [GPIO");
+        Serial.print(hoppers[i]->getPulsePin());
+        Serial.print("] [Time: ");
+        Serial.print(millis());
+        Serial.println("ms]");
+      }
+      lastCoinCount[i] = currentCoinCount;
     }
-    lastCoinCount = currentCoinCount;
   }
   
   // Periodic status summary (less frequent) - only in manual mode
   if (realTimeMode && !rpiMode && millis() - lastSerialOutput >= SERIAL_OUTPUT_INTERVAL) {
-    if (currentCoinCount > 0) {
-      Serial.print("📊 Total: ");
-      Serial.print(currentCoinCount);
-      Serial.print(" coins | Rate: ");
-      Serial.print(coinHopper.getPulseRate(), 2);
-      Serial.print(" coins/sec | Last: ");
-      Serial.print(coinHopper.getLastPulseTime());
-      Serial.println("ms ago");
+    unsigned long totalAllHoppers = coinHopper1.getTotalCoins() + coinHopper2.getTotalCoins() + coinHopper3.getTotalCoins();
+    
+    if (totalAllHoppers > 0) {
+      Serial.print("📊 Total ALL: ");
+      Serial.print(totalAllHoppers);
+      Serial.print(" | H1:");
+      Serial.print(coinHopper1.getTotalCoins());
+      Serial.print(" H2:");
+      Serial.print(coinHopper2.getTotalCoins());
+      Serial.print(" H3:");
+      Serial.print(coinHopper3.getTotalCoins());
       
       if (countingActive) {
-        Serial.print("🎯 Session: ");
-        Serial.print(currentCoinCount - sessionStartCount);
-        Serial.println(" coins");
+        unsigned long sessionTotal = 0;
+        for (int i = 0; i < NUM_COIN_HOPPERS; i++) {
+          sessionTotal += hoppers[i]->getTotalCoins() - sessionStartCount[i];
+        }
+        Serial.print(" | 🎯 Session: ");
+        Serial.print(sessionTotal);
       }
+      Serial.println();
     }
     lastSerialOutput = millis();
   }
   
-  // Update coin hopper
-  coinHopper.update();
+  // Update all coin hoppers
+  coinHopper1.update();
+  coinHopper2.update();
+  coinHopper3.update();
   
   // Minimal delay for real-time responsiveness
   delay(5);
@@ -135,12 +164,25 @@ void handleSerialCommands() {
     command.toLowerCase();
     
     if (command == "count") {
-      Serial.print("Current coin count: ");
-      Serial.println(coinHopper.getTotalCoins());
+      Serial.println("=== Coin Counts ===");
+      Serial.print("Hopper 1 (GPIO19): ");
+      Serial.println(coinHopper1.getTotalCoins());
+      Serial.print("Hopper 2 (GPIO18): ");
+      Serial.println(coinHopper2.getTotalCoins());
+      Serial.print("Hopper 3 (GPIO4):  ");
+      Serial.println(coinHopper3.getTotalCoins());
+      Serial.print("Total: ");
+      Serial.println(coinHopper1.getTotalCoins() + coinHopper2.getTotalCoins() + coinHopper3.getTotalCoins());
     }
     else if (command == "reset") {
-      coinHopper.resetCounter();
-      Serial.println("Coin counter reset to 0");
+      coinHopper1.resetCounter();
+      coinHopper2.resetCounter();
+      coinHopper3.resetCounter();
+      for (int i = 0; i < NUM_COIN_HOPPERS; i++) {
+        lastCoinCount[i] = 0;
+        sessionStartCount[i] = 0;
+      }
+      Serial.println("All coin counters reset to 0");
     }
     else if (command.startsWith("dispense")) {
       int spaceIndex = command.indexOf(' ');
@@ -149,9 +191,9 @@ void handleSerialCommands() {
         if (coinsToDispense > 0 && coinsToDispense <= 100) {
           Serial.print("Dispensing ");
           Serial.print(coinsToDispense);
-          Serial.println(" coins...");
+          Serial.println(" coins from Hopper 1...");
           
-          bool success = coinHopper.dispenseCoins(coinsToDispense);
+          bool success = coinHopper1.dispenseCoins(coinsToDispense);
           if (success) {
             Serial.println("Coins dispensed successfully!");
           } else {
@@ -166,13 +208,34 @@ void handleSerialCommands() {
     }
     else if (command == "status") {
       Serial.println("=== Coin Hopper Status ===");
-      Serial.print("Total coins detected: ");
-      Serial.println(coinHopper.getTotalCoins());
-      Serial.print("Pulse rate: ");
-      Serial.print(coinHopper.getPulseRate());
+      Serial.println("Hopper 1 (GPIO19):");
+      Serial.print("  Total coins: ");
+      Serial.println(coinHopper1.getTotalCoins());
+      Serial.print("  Pulse rate: ");
+      Serial.print(coinHopper1.getPulseRate());
       Serial.println(" pulses/sec");
-      Serial.print("Last pulse time: ");
-      Serial.print(coinHopper.getLastPulseTime());
+      Serial.print("  Last pulse: ");
+      Serial.print(coinHopper1.getLastPulseTime());
+      Serial.println(" ms ago");
+      
+      Serial.println("Hopper 2 (GPIO18):");
+      Serial.print("  Total coins: ");
+      Serial.println(coinHopper2.getTotalCoins());
+      Serial.print("  Pulse rate: ");
+      Serial.print(coinHopper2.getPulseRate());
+      Serial.println(" pulses/sec");
+      Serial.print("  Last pulse: ");
+      Serial.print(coinHopper2.getLastPulseTime());
+      Serial.println(" ms ago");
+      
+      Serial.println("Hopper 3 (GPIO4):");
+      Serial.print("  Total coins: ");
+      Serial.println(coinHopper3.getTotalCoins());
+      Serial.print("  Pulse rate: ");
+      Serial.print(coinHopper3.getPulseRate());
+      Serial.println(" pulses/sec");
+      Serial.print("  Last pulse: ");
+      Serial.print(coinHopper3.getLastPulseTime());
       Serial.println(" ms ago");
       Serial.println("=========================");
     }
@@ -244,10 +307,15 @@ bool handleRPiCommand(String command) {
     return true;
   }
   else if (command == CMD_RESET_COUNT) {
-    coinHopper.resetCounter();
-    sessionStartCount = 0;
+    coinHopper1.resetCounter();
+    coinHopper2.resetCounter();
+    coinHopper3.resetCounter();
+    for (int i = 0; i < NUM_COIN_HOPPERS; i++) {
+      sessionStartCount[i] = 0;
+      lastCoinCount[i] = 0;
+    }
     sessionStartTime = millis();
-    sendResponse("RESET_COUNT", "OK", "Counter reset");
+    sendResponse("RESET_COUNT", "OK", "All counters reset");
     return true;
   }
   else if (command.startsWith(CMD_SET_RPI_MODE)) {
@@ -277,11 +345,13 @@ bool handleRPiCommand(String command) {
 void startCounting() {
   if (!countingActive) {
     countingActive = true;
-    sessionStartCount = coinHopper.getTotalCoins();
+    sessionStartCount[0] = coinHopper1.getTotalCoins();
+    sessionStartCount[1] = coinHopper2.getTotalCoins();
+    sessionStartCount[2] = coinHopper3.getTotalCoins();
     sessionStartTime = millis();
     
     if (!rpiMode) {
-      Serial.println("🟢 Counting session STARTED");
+      Serial.println("🟢 Counting session STARTED for all 3 hoppers");
     }
   }
 }
@@ -291,29 +361,61 @@ void stopCounting() {
     countingActive = false;
     
     if (!rpiMode) {
-      unsigned long sessionCoins = coinHopper.getTotalCoins() - sessionStartCount;
-      Serial.print("🔴 Counting session STOPPED. Session coins: ");
-      Serial.println(sessionCoins);
+      unsigned long sessionCoins1 = coinHopper1.getTotalCoins() - sessionStartCount[0];
+      unsigned long sessionCoins2 = coinHopper2.getTotalCoins() - sessionStartCount[1];
+      unsigned long sessionCoins3 = coinHopper3.getTotalCoins() - sessionStartCount[2];
+      unsigned long totalSessionCoins = sessionCoins1 + sessionCoins2 + sessionCoins3;
+      
+      Serial.print("🔴 Counting session STOPPED. Session coins - H1:");
+      Serial.print(sessionCoins1);
+      Serial.print(" H2:");
+      Serial.print(sessionCoins2);
+      Serial.print(" H3:");
+      Serial.print(sessionCoins3);
+      Serial.print(" Total:");
+      Serial.println(totalSessionCoins);
     }
   }
 }
 
 void sendCountData() {
-  unsigned long totalCoins = coinHopper.getTotalCoins();
-  unsigned long sessionCoins = countingActive ? (totalCoins - sessionStartCount) : 0;
-  float pulseRate = coinHopper.getPulseRate();
-  unsigned long lastPulse = coinHopper.getLastPulseTime();
+  COIN_HOPPER* hoppers[] = {&coinHopper1, &coinHopper2, &coinHopper3};
+  
+  unsigned long totalCoins1 = coinHopper1.getTotalCoins();
+  unsigned long totalCoins2 = coinHopper2.getTotalCoins();
+  unsigned long totalCoins3 = coinHopper3.getTotalCoins();
+  unsigned long totalAllCoins = totalCoins1 + totalCoins2 + totalCoins3;
+  
+  unsigned long sessionCoins1 = countingActive ? (totalCoins1 - sessionStartCount[0]) : 0;
+  unsigned long sessionCoins2 = countingActive ? (totalCoins2 - sessionStartCount[1]) : 0;
+  unsigned long sessionCoins3 = countingActive ? (totalCoins3 - sessionStartCount[2]) : 0;
+  unsigned long sessionTotal = sessionCoins1 + sessionCoins2 + sessionCoins3;
   
   Serial.print("{\"command\":\"GET_COUNT\",\"status\":\"OK\",\"data\":{");
-  Serial.print("\"total_coins\":");
-  Serial.print(totalCoins);
-  Serial.print(",\"session_coins\":");
-  Serial.print(sessionCoins);
-  Serial.print(",\"pulse_rate\":");
-  Serial.print(pulseRate, 2);
-  Serial.print(",\"last_pulse_ms\":");
-  Serial.print(lastPulse);
-  Serial.print(",\"counting_active\":");
+  Serial.print("\"total_coins_all\":");
+  Serial.print(totalAllCoins);
+  Serial.print(",\"session_coins_all\":");
+  Serial.print(sessionTotal);
+  Serial.print(",\"hoppers\":[");
+  
+  for (int i = 0; i < NUM_COIN_HOPPERS; i++) {
+    if (i > 0) Serial.print(",");
+    Serial.print("{\"id\":");
+    Serial.print(i + 1);
+    Serial.print(",\"gpio\":");
+    Serial.print(hoppers[i]->getPulsePin());
+    Serial.print(",\"total_coins\":");
+    Serial.print(hoppers[i]->getTotalCoins());
+    Serial.print(",\"session_coins\":");
+    Serial.print(countingActive ? (hoppers[i]->getTotalCoins() - sessionStartCount[i]) : 0);
+    Serial.print(",\"pulse_rate\":");
+    Serial.print(hoppers[i]->getPulseRate(), 2);
+    Serial.print(",\"last_pulse_ms\":");
+    Serial.print(hoppers[i]->getLastPulseTime());
+    Serial.print("}");
+  }
+  
+  Serial.print("],\"counting_active\":");
   Serial.print(countingActive ? "true" : "false");
   Serial.print(",\"timestamp\":");
   Serial.print(millis());
@@ -322,11 +424,11 @@ void sendCountData() {
 
 void sendStatusData() {
   unsigned long uptime = millis();
-  bool hopperReady = coinHopper.isReady();
+  COIN_HOPPER* hoppers[] = {&coinHopper1, &coinHopper2, &coinHopper3};
   
   Serial.print("{\"command\":\"GET_STATUS\",\"status\":\"OK\",\"data\":{");
-  Serial.print("\"hopper_ready\":");
-  Serial.print(hopperReady ? "true" : "false");
+  Serial.print("\"num_hoppers\":");
+  Serial.print(NUM_COIN_HOPPERS);
   Serial.print(",\"counting_active\":");
   Serial.print(countingActive ? "true" : "false");
   Serial.print(",\"rpi_mode\":");
@@ -335,9 +437,22 @@ void sendStatusData() {
   Serial.print(uptime);
   Serial.print(",\"session_duration_ms\":");
   Serial.print(countingActive ? (uptime - sessionStartTime) : 0);
-  Serial.print(",\"pulse_pin\":");
-  Serial.print(COIN_HOPPER_PULSE_PIN);
-  Serial.println("}}");
+  Serial.print(",\"hoppers\":[");
+  
+  for (int i = 0; i < NUM_COIN_HOPPERS; i++) {
+    if (i > 0) Serial.print(",");
+    Serial.print("{\"id\":");
+    Serial.print(i + 1);
+    Serial.print(",\"gpio\":");
+    Serial.print(hoppers[i]->getPulsePin());
+    Serial.print(",\"ready\":");
+    Serial.print(hoppers[i]->isReady() ? "true" : "false");
+    Serial.print(",\"dispensing\":");
+    Serial.print(hoppers[i]->isCurrentlyDispensing() ? "true" : "false");
+    Serial.print("}");
+  }
+  
+  Serial.println("]}}");
 }
 
 void sendResponse(String command, String status, String message) {
@@ -352,17 +467,24 @@ void sendResponse(String command, String status, String message) {
   Serial.println("}");
 }
 
-void sendCoinEvent(unsigned long coinNumber) {
+void sendCoinEvent(int hopperId, unsigned long coinNumber) {
   if (rpiMode && countingActive) {
+    COIN_HOPPER* hoppers[] = {&coinHopper1, &coinHopper2, &coinHopper3};
+    int hopperIndex = hopperId - 1; // Convert to 0-based index
+    
     Serial.print("{\"event\":\"COIN_DETECTED\",\"data\":{");
-    Serial.print("\"coin_number\":");
+    Serial.print("\"hopper_id\":");
+    Serial.print(hopperId);
+    Serial.print(",\"gpio\":");
+    Serial.print(hoppers[hopperIndex]->getPulsePin());
+    Serial.print(",\"coin_number\":");
     Serial.print(coinNumber);
     Serial.print(",\"session_coin\":");
-    Serial.print(coinNumber - sessionStartCount);
+    Serial.print(coinNumber - sessionStartCount[hopperIndex]);
     Serial.print(",\"timestamp\":");
     Serial.print(millis());
     Serial.print(",\"pulse_rate\":");
-    Serial.print(coinHopper.getPulseRate(), 2);
+    Serial.print(hoppers[hopperIndex]->getPulseRate(), 2);
     Serial.println("}}");
   }
 }

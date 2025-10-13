@@ -27,6 +27,7 @@ class COIN_HOPPER {
 private:
     // Hardware pins
     int pulsePin;
+    int hopperId;  // Unique identifier for this hopper instance
     
     // Pulse counting variables
     volatile unsigned long pulseCount;
@@ -48,9 +49,11 @@ private:
     unsigned long totalCoinsDetected;
     float currentPulseRate;
     
-    // Static interrupt service routine
-    static COIN_HOPPER* instance;
-    static void IRAM_ATTR pulseISR();
+    // Static arrays for multiple instance support
+    static COIN_HOPPER* instances[3];  // Fixed size instead of NUM_COIN_HOPPERS
+    static void IRAM_ATTR pulseISR_Hopper1();
+    static void IRAM_ATTR pulseISR_Hopper2();
+    static void IRAM_ATTR pulseISR_Hopper3();
     
     // Private helper methods
     void handlePulseInterrupt();
@@ -60,10 +63,12 @@ private:
 public:
     // Constructor
     COIN_HOPPER();
+    COIN_HOPPER(int hopperIdNumber);
     
     // Initialization
     bool begin();
     bool begin(int pulsePinNumber);
+    bool begin(int pulsePinNumber, int hopperIdNumber);
     
     // Core functionality
     void update();
@@ -89,13 +94,15 @@ public:
     // Configuration methods
     void setDebounceTime(unsigned long debounceMs);
     void setPulsePin(int pin);
+    int getHopperId() const;
+    int getPulsePin() const;
     
     // Diagnostics
     void runDiagnostics();
     bool testPulseDetection(int testDurationMs = 5000);
 };
 
-// Global instance pointer for interrupt handling
-extern COIN_HOPPER* g_coinHopperInstance;
+// Global instance pointers for interrupt handling (multiple hoppers)
+extern COIN_HOPPER* g_coinHopperInstances[3];  // Fixed size instead of NUM_COIN_HOPPERS
 
 #endif // COIN_HOPPER_H
