@@ -143,10 +143,12 @@ class ImageClassifier:
     def capture_image(self, show_preview=True, save_debug=True):
         """Capture image from camera with optional GUI preview"""
         try:
+            print("Attempting to read from camera...")
             ret, frame = self.camera.read()
             if not ret:
-                print("Failed to capture image")
+                print("Failed to capture image: camera.read() returned False")
                 return None
+            print("Successfully read frame from camera")
             
             # Show preview if GUI mode is available and requested
             if self.gui_mode and show_preview:
@@ -200,13 +202,14 @@ class ImageClassifier:
             # Convert to percentage
             confidence_percent = confidence * 100
             
+            print("Processing prediction...")
             # Get label
             if prediction_index < len(self.labels):
                 predicted_label = self.labels[prediction_index]
             else:
                 predicted_label = f"Unknown_{prediction_index}"
             
-            print(f"Classification: {predicted_label} ({confidence_percent:.2f}%) - Time: {inference_time:.3f}s")
+            print(f"Classification complete: {predicted_label} ({confidence_percent:.2f}%) - Time: {inference_time:.3f}s")
             
             return predicted_label, confidence_percent
             
@@ -214,23 +217,56 @@ class ImageClassifier:
             print(f"Error during classification: {e}")
             return None, 0.0
     
+    def control_flash(self, state):
+        """Control the IP camera's flash LED"""
+        try:
+            import urllib.request
+            base_url = self.camera_url.rsplit('/', 1)[0]  # Remove 'stream' from the end
+            url = f"{base_url}/flash/{'on' if state else 'off'}"
+            print(f"Sending flash {'ON' if state else 'OFF'} request to: {url}")
+            
+            # Create request with timeout
+            request = urllib.request.Request(url)
+            response = urllib.request.urlopen(request, timeout=2)  # 2 second timeout
+            
+            if response.status == 200:
+                print(f"Flash {'ON' if state else 'OFF'} command successful")
+            else:
+                print(f"Flash control failed with status: {response.status}")
+                
+        except urllib.error.URLError as e:
+            print(f"Network error controlling flash: {e}")
+            # Continue with classification even if flash control fails
+        except Exception as e:
+            print(f"Error controlling flash: {e}")
+            # Continue with classification even if flash control fails
+    
     def classify_multiple_times(self, num_classifications=5, delay_between=0.2, show_preview=None):
         """Run classification multiple times and return majority vote"""
         if show_preview is None:
             show_preview = self.gui_mode
             
-        print(f"Running {num_classifications} classifications... (GUI: {show_preview})")
+        print("\nAttempting to turn on flash...")
+        # Try to turn on flash but continue even if it fails
+        self.control_flash(True)
+        
+        print(f"Starting classification ({num_classifications} times)...")
+        print("Initializing prediction arrays...")
         
         predictions = []
         confidences = []
+        print("Arrays initialized successfully")
         
         for i in range(num_classifications):
             print(f"Classification {i+1}/{num_classifications}")
             
+            print(f"\nAttempting capture for classification {i+1}/{num_classifications}")
             # Capture fresh image for each classification
             image = self.capture_image(show_preview=show_preview, save_debug=(i == 0))  # Only save first debug image
             if image is None:
+                print(f"Failed to capture image for classification {i+1}")
                 continue
+            print(f"Successfully captured image for classification {i+1}")
             
             # Classify image
             prediction, confidence = self.classify_image(image)
@@ -329,6 +365,9 @@ class ImageClassifier:
     def cleanup(self):
         """Clean up camera resources"""
         try:
+            # Turn off flash
+            self.control_flash(False)
+            
             if hasattr(self, 'camera') and self.camera.isOpened():
                 self.camera.release()
                 print("Camera released")
@@ -339,7 +378,20 @@ class ImageClassifier:
 def test_classifier():
     """Test the classifier with Teachable Machine model"""
     try:
-        classifier = ImageClassifier(enable_gui=False)
+        # Enable GUI for preview
+        classifier = ImageClassifier(enable_gui=True)
+        
+        print("\nShowing real-time preview. Press 'q' when ready to classify...")
+        while True:
+            ret, frame = classifier.camera.read()
+            if ret:
+                cv2.imshow("Camera Preview - Press 'q' when ready", frame)
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    cv2.destroyAllWindows()
+                    break
+            else:
+                print("Failed to get frame from camera")
+                break
         
         print("Testing classifier with 3 classifications...")
         prediction, confidence = classifier.classify_multiple_times(num_classifications=3)
