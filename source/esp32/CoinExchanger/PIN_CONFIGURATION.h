@@ -23,11 +23,31 @@
 #define COIN_HOPPER_2_PULSE_PIN  18      // GPIO18 - Hopper 2 pulse signal  
 #define COIN_HOPPER_3_PULSE_PIN  4       // GPIO4  - Hopper 3 pulse signal
 
+// ALLAN Coin Hoppers - Solid State Relay Control Pins (3 SSRs)
+#define COIN_HOPPER_1_SSR_PIN    26      // GPIO26 - Hopper 1 power control (SSR)
+#define COIN_HOPPER_2_SSR_PIN    25      // GPIO25 - Hopper 2 power control (SSR)
+#define COIN_HOPPER_3_SSR_PIN    33      // GPIO33 - Hopper 3 power control (SSR)
+
 // Legacy definition for backward compatibility
 #define COIN_HOPPER_PULSE_PIN    COIN_HOPPER_1_PULSE_PIN
 
 // Total number of coin hoppers
 #define NUM_COIN_HOPPERS         3
+
+// Coin Values in Philippine Pesos
+#define COIN_HOPPER_1_VALUE      5       // 5 peso coins
+#define COIN_HOPPER_2_VALUE      10      // 10 peso coins
+#define COIN_HOPPER_3_VALUE      20      // 20 peso coins
+
+// SSR Control Settings
+#define SSR_ACTIVE_HIGH          true    // SSR is activated with HIGH signal
+#define SSR_STARTUP_DELAY_MS     500     // Delay after turning on SSR before reading pulses
+#define SSR_SHUTDOWN_DELAY_MS    100     // Delay before turning off SSR after counting stops
+
+// Dispensing Settings
+#define MAX_DISPENSE_AMOUNT      1000    // Maximum amount that can be dispensed (PHP)
+#define DISPENSE_TIMEOUT_MS      30000   // Timeout for dispensing operations
+#define COIN_DISPENSE_DELAY_MS   200     // Delay between coin dispenses
 
 // Additional GPIO pins that might be used for future expansion
 #define COIN_HOPPER_ENABLE_PIN   -1      // Not used in current configuration
@@ -61,13 +81,15 @@
 #define DOOR_SENSOR_PIN         34       // Coin compartment door sensor
 
 // ===== DIGITAL OUTPUT PINS =====
-#define BUZZER_PIN              25       // Piezo buzzer for audio feedback
-#define RELAY_OUTPUT_PIN        26       // General purpose relay output
-#define COIN_GATE_SERVO_PIN     27       // Servo for coin gate control
+#define BUZZER_PIN              32       // Piezo buzzer for audio feedback (moved from 25)
+#define RELAY_OUTPUT_PIN        27       // General purpose relay output (moved from 26)
+#define COIN_GATE_SERVO_PIN     14       // Servo for coin gate control (moved from 27)
+// NOTE: GPIO25, GPIO26, GPIO33 are now used for coin hopper SSR control
 
 // ===== PWM OUTPUT PINS =====
-#define LED_STRIP_PIN           32       // WS2812B LED strip control
-#define FAN_CONTROL_PIN         33       // PWM fan speed control
+#define LED_STRIP_PIN           13       // WS2812B LED strip control (moved from 32)
+#define FAN_CONTROL_PIN         12       // PWM fan speed control (moved from 33)
+// NOTE: GPIO32 moved to BUZZER_PIN, GPIO33 now used for coin hopper SSR control
 
 // ===== PIN VALIDATION MACROS =====
 #define IS_VALID_GPIO(pin)      ((pin >= 0) && (pin <= 39) && (pin != 6) && (pin != 7) && (pin != 8) && (pin != 9) && (pin != 10) && (pin != 11))
@@ -117,6 +139,15 @@
 // Check for pin conflicts
 #if (COIN_HOPPER_PULSE_PIN == STATUS_LED_PIN)
     #warning "Pin conflict: COIN_HOPPER_PULSE_PIN and STATUS_LED_PIN use the same GPIO"
+#endif
+
+// Check SSR pin conflicts
+#if (COIN_HOPPER_1_SSR_PIN == COIN_HOPPER_2_SSR_PIN) || (COIN_HOPPER_1_SSR_PIN == COIN_HOPPER_3_SSR_PIN) || (COIN_HOPPER_2_SSR_PIN == COIN_HOPPER_3_SSR_PIN)
+    #error "SSR pin conflict: Each hopper must have a unique SSR control pin"
+#endif
+
+#if !IS_OUTPUT_PIN(COIN_HOPPER_1_SSR_PIN) || !IS_OUTPUT_PIN(COIN_HOPPER_2_SSR_PIN) || !IS_OUTPUT_PIN(COIN_HOPPER_3_SSR_PIN)
+    #error "SSR pins must support output mode"
 #endif
 
 #endif // PIN_CONFIGURATION_H
