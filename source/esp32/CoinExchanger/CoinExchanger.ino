@@ -36,6 +36,12 @@ unsigned long sessionStartCount[NUM_COIN_HOPPERS] = {0, 0, 0};
 unsigned long sessionStartTime = 0;
 String inputBuffer = "";
 
+// Simple timing and pulse counting mode variables
+bool simpleTimingMode = false;
+int simpleCounts[3] = {0, 0, 0};
+unsigned long simpleLastInterruptTimes[3] = {0, 0, 0};
+bool simpleCountingActive = false;
+
 // Communication protocol constants
 const String CMD_START_COUNT = "START_COUNT";
 const String CMD_STOP_COUNT = "STOP_COUNT";
@@ -77,14 +83,55 @@ void setup() {
   Serial.println("Real-time counting: ENABLED");
   Serial.println("RPi Mode: DISABLED (use SET_RPI_MODE ON to enable)");
   Serial.println("Drop coins to see live counting...");
+  
+  // Initialize simple timing mode interrupts (alternative to COIN_HOPPER class)
+  // These will be used when simpleTimingMode is enabled
+  // Using the same pins but different interrupt handlers for direct timing control
+}
+
+// Simple timing mode interrupt handlers (140ms debounce timing)
+void IRAM_ATTR simpleHopper1ISR() {
+  if (!simpleTimingMode || !simpleCountingActive) return;
+  
+  unsigned long currentTime = millis();
+  if (currentTime - simpleLastInterruptTimes[0] > 140) {  // 140ms debounce
+    simpleCounts[0]++;
+    simpleLastInterruptTimes[0] = currentTime;
+  }
+}
+
+void IRAM_ATTR simpleHopper2ISR() {
+  if (!simpleTimingMode || !simpleCountingActive) return;
+  
+  unsigned long currentTime = millis();
+  if (currentTime - simpleLastInterruptTimes[1] > 140) {  // 140ms debounce
+    simpleCounts[1]++;
+    simpleLastInterruptTimes[1] = currentTime;
+  }
+}
+
+void IRAM_ATTR simpleHopper3ISR() {
+  if (!simpleTimingMode || !simpleCountingActive) return;
+  
+  unsigned long currentTime = millis();
+  if (currentTime - simpleLastInterruptTimes[2] > 140) {  // 140ms debounce
+    simpleCounts[2]++;
+    simpleLastInterruptTimes[2] = currentTime;
+  }
 }
 
 void loop() {
   // Handle serial commands
   handleSerialCommands();
   
-  // Check all 3 coin hoppers for new coins
-  COIN_HOPPER* hoppers[] = {&coinHopper1, &coinHopper2, &coinHopper3};
+  // Handle simple timing mode output
+  if (simpleTimingMode) {
+    handleSimpleTimingMode();
+  }
+  
+  // Check all 3 coin hoppers for new coins (only if not in simple timing mode)
+  if (!simpleTimingMode) {
+    COIN_HOPPER* hoppers[] = {&coinHopper1, &coinHopper2, &coinHopper3};
   
   for (int i = 0; i < NUM_COIN_HOPPERS; i++) {
     unsigned long currentCoinCount = hoppers[i]->getTotalCoins();
@@ -140,14 +187,57 @@ void loop() {
     }
     lastSerialOutput = millis();
   }
+  }
   
-  // Update all coin hoppers
-  coinHopper1.update();
-  coinHopper2.update();
-  coinHopper3.update();
+  // Update all coin hoppers (only if not in simple timing mode)
+  if (!simpleTimingMode) {
+    coinHopper1.update();
+    coinHopper2.update();
+    coinHopper3.update();
+  }
   
   // Minimal delay for real-time responsiveness
   delay(5);
+}
+
+// Simple timing mode handler function
+void handleSimpleTimingMode() {
+  static unsigned long lastSimpleOutput = 0;
+  static int lastSimpleCounts[3] = {0, 0, 0};
+  
+  // Check for new coins and display immediately
+  for (int i = 0; i < 3; i++) {
+    if (simpleCounts[i] != lastSimpleCounts[i]) {
+      Serial.print("💰 SIMPLE H");
+      Serial.print(i + 1);
+      Serial.print(" - COIN #");
+      Serial.print(simpleCounts[i]);
+      Serial.print(" detected! [140ms debounce] [GPIO");
+      Serial.print(i == 0 ? COIN_HOPPER_1_PULSE_PIN : (i == 1 ? COIN_HOPPER_2_PULSE_PIN : COIN_HOPPER_3_PULSE_PIN));
+      Serial.print("] [Time: ");
+      Serial.print(millis());
+      Serial.println("ms]");
+      lastSimpleCounts[i] = simpleCounts[i];
+    }
+  }
+  
+  // Periodic summary every 1 second
+  if (millis() - lastSimpleOutput >= 1000) {
+    int totalSimple = simpleCounts[0] + simpleCounts[1] + simpleCounts[2];
+    if (totalSimple > 0 || simpleCountingActive) {
+      Serial.print("📊 SIMPLE MODE | H1:");
+      Serial.print(simpleCounts[0]);
+      Serial.print(" H2:");
+      Serial.print(simpleCounts[1]);
+      Serial.print(" H3:");
+      Serial.print(simpleCounts[2]);
+      Serial.print(" | Total:");
+      Serial.print(totalSimple);
+      Serial.print(" | Status:");
+      Serial.println(simpleCountingActive ? "COUNTING" : "STOPPED");
+    }
+    lastSimpleOutput = millis();
+  }
 }
 
 void handleSerialCommands() {
@@ -259,6 +349,113 @@ void handleSerialCommands() {
         Serial.println(realTimeMode ? "ENABLED" : "DISABLED");
       }
     }
+    else if (command == "simple") {
+      if (!simpleTimingMode) {
+        // Switch to simple timing mode
+        simpleTimingMode = true;
+        
+        // Detach existing interrupts and attach simple ones
+        detachInterrupt(digitalPinToInterrupt(COIN_HOPPER_1_PULSE_PIN));
+        detachInterrupt(digitalPinToInterrupt(COIN_HOPPER_2_PULSE_PIN));
+        detachInterrupt(digitalPinToInterrupt(COIN_HOPPER_3_PULSE_PIN));
+        
+        attachInterrupt(digitalPinToInterrupt(COIN_HOPPER_1_PULSE_PIN), simpleHopper1ISR, FALLING);
+        attachInterrupt(digitalPinToInterrupt(COIN_HOPPER_2_PULSE_PIN), simpleHopper2ISR, FALLING);
+        attachInterrupt(digitalPinToInterrupt(COIN_HOPPER_3_PULSE_PIN), simpleHopper3ISR, FALLING);
+        
+        // Reset simple counters
+        for (int i = 0; i < 3; i++) {
+          simpleCounts[i] = 0;
+          simpleLastInterruptTimes[i] = 0;
+        }
+        
+        Serial.println("✅ SIMPLE TIMING MODE ENABLED");
+        Serial.println("140ms debounce timing active");
+        Serial.println("Commands: 'simplestart', 'simplestop', 'simplecount', 'simplereset', 'normal'");
+      } else {
+        Serial.println("Already in simple timing mode");
+      }
+    }
+    else if (command == "normal") {
+      if (simpleTimingMode) {
+        // Switch back to normal mode
+        simpleTimingMode = false;
+        simpleCountingActive = false;
+        
+        // Detach simple interrupts
+        detachInterrupt(digitalPinToInterrupt(COIN_HOPPER_1_PULSE_PIN));
+        detachInterrupt(digitalPinToInterrupt(COIN_HOPPER_2_PULSE_PIN));
+        detachInterrupt(digitalPinToInterrupt(COIN_HOPPER_3_PULSE_PIN));
+        
+        // Reinitialize coin hoppers (this will reattach their interrupts)
+        coinHopper1.begin(COIN_HOPPER_1_PULSE_PIN, 0);
+        coinHopper2.begin(COIN_HOPPER_2_PULSE_PIN, 1);
+        coinHopper3.begin(COIN_HOPPER_3_PULSE_PIN, 2);
+        
+        Serial.println("✅ NORMAL MODE RESTORED");
+        Serial.println("Advanced COIN_HOPPER class active");
+      } else {
+        Serial.println("Already in normal mode");
+      }
+    }
+    else if (command == "simplestart") {
+      if (simpleTimingMode) {
+        simpleCountingActive = true;
+        // Reset counters when starting
+        for (int i = 0; i < 3; i++) {
+          simpleCounts[i] = 0;
+          simpleLastInterruptTimes[i] = 0;
+        }
+        Serial.println("🎯 Simple counting STARTED - Counters reset");
+      } else {
+        Serial.println("Not in simple timing mode. Use 'simple' command first.");
+      }
+    }
+    else if (command == "simplestop") {
+      if (simpleTimingMode) {
+        simpleCountingActive = false;
+        Serial.println("🛑 Simple counting STOPPED");
+        Serial.print("Final counts -> H1:");
+        Serial.print(simpleCounts[0]);
+        Serial.print(" H2:");
+        Serial.print(simpleCounts[1]);
+        Serial.print(" H3:");
+        Serial.print(simpleCounts[2]);
+        Serial.print(" Total:");
+        Serial.println(simpleCounts[0] + simpleCounts[1] + simpleCounts[2]);
+      } else {
+        Serial.println("Not in simple timing mode. Use 'simple' command first.");
+      }
+    }
+    else if (command == "simplecount") {
+      if (simpleTimingMode) {
+        Serial.println("=== Simple Mode Counts ===");
+        Serial.print("Hopper 1 (GPIO19): ");
+        Serial.println(simpleCounts[0]);
+        Serial.print("Hopper 2 (GPIO18): ");
+        Serial.println(simpleCounts[1]);
+        Serial.print("Hopper 3 (GPIO4):  ");
+        Serial.println(simpleCounts[2]);
+        Serial.print("Total: ");
+        Serial.println(simpleCounts[0] + simpleCounts[1] + simpleCounts[2]);
+        Serial.print("Status: ");
+        Serial.println(simpleCountingActive ? "COUNTING" : "STOPPED");
+        Serial.println("Debounce: 140ms per hopper");
+      } else {
+        Serial.println("Not in simple timing mode. Use 'simple' command first.");
+      }
+    }
+    else if (command == "simplereset") {
+      if (simpleTimingMode) {
+        for (int i = 0; i < 3; i++) {
+          simpleCounts[i] = 0;
+          simpleLastInterruptTimes[i] = 0;
+        }
+        Serial.println("Simple mode counters reset to 0");
+      } else {
+        Serial.println("Not in simple timing mode. Use 'simple' command first.");
+      }
+    }
     else if (command == "help") {
       Serial.println("=== MANUAL COMMANDS ===");
       Serial.println("  count - Display current coin count");
@@ -267,6 +464,14 @@ void handleSerialCommands() {
       Serial.println("  realtime on/off - Toggle real-time counting display");
       Serial.println("  status - Show detailed hopper status");
       Serial.println("  help - Show this help message");
+      Serial.println("");
+      Serial.println("=== SIMPLE TIMING MODE (140ms debounce) ===");
+      Serial.println("  simple - Switch to simple timing mode");
+      Serial.println("  normal - Switch back to normal mode");
+      Serial.println("  simplestart - Start simple counting (resets counters)");
+      Serial.println("  simplestop - Stop simple counting");
+      Serial.println("  simplecount - Display simple mode counts");
+      Serial.println("  simplereset - Reset simple mode counters");
       Serial.println("");
       Serial.println("=== RPI COMMANDS (case-sensitive) ===");
       Serial.println("  START_COUNT - Begin counting session");
