@@ -546,6 +546,26 @@ source/esp32/ChitExchanger/
 ├──  PIEZO_BUZZER.h/.cpp        # Audio feedback system
 ├── ⚙️ PIN_CONFIGURATION.h        # Centralized pin definitions
 └── 🌐 WIFI_COMMUNICATION.h/.cpp  # WiFi bridge to Raspberry Pi
+
+├── 🟦 SOLID_STATE_RELAY.h/.cpp   # Modular SSR control (NEW)
+├── 🟧 COIN_HOPPER.h/.cpp          # Refactored: now uses SOLID_STATE_RELAY for power control
+
+### Modular Hardware Abstraction (NEW)
+- **SOLID_STATE_RELAY**: Dedicated class for controlling solid state relays (SSR) powering coin hoppers. Encapsulates relay logic, safety, and status methods. Used by COIN_HOPPER for power management.
+- **COIN_HOPPER**: Refactored to use SOLID_STATE_RELAY for SSR control. Each hopper is now composed with its own SSR instance, improving modularity and maintainability.
+
+### Hardware Testing Commands (NEW)
+- Serial monitor commands added for individual testing of coin hopper sensors and SSR relays:
+    - `TEST_HOPPER_X`: Test pulse counting for hopper X (X=1,2,3)
+    - `TEST_SSR_X`: Test SSR relay activation for hopper X
+    - `TEST_ALL`: Run full hardware test sequence
+    - Results and status are printed to serial monitor for diagnostics.
+
+### Refactor Summary
+- All SSR logic removed from COIN_HOPPER and moved to SOLID_STATE_RELAY.
+- COIN_HOPPER now composes SOLID_STATE_RELAY for power control.
+- Pin definitions for SSRs and hoppers updated in PIN_CONFIGURATION.h.
+- Hardware test commands added to main application for diagnostics.
 model/
 ├── TB74.f3d                     # TB74 bill acceptor 3D model (Fusion 360)
 ├── TB74.png                     # TB74 bill acceptor reference image
@@ -1519,6 +1539,18 @@ Piezo Buzzer:
 3. **Interrupt Testing**: Confirm coin/bill detection
 4. **Servo Calibration**: Adjust angles for proper dispensing
 5. **Integration Test**: Full system operation
+
+#### New Hardware Test Workflow (2025)
+- Use serial monitor commands to test each coin hopper sensor and SSR relay individually:
+    - `TEST_HOPPER_1`, `TEST_HOPPER_2`, `TEST_HOPPER_3`: Pulse counting and sensor validation
+    - `TEST_SSR_1`, `TEST_SSR_2`, `TEST_SSR_3`: Relay activation and status check
+    - `TEST_ALL`: Runs all tests in sequence, prints results
+- Use these commands for hardware validation, troubleshooting, and diagnostics before full integration.
+
+#### Modular SSR & Hopper Design
+- Each coin hopper is powered by its own SSR, controlled via the SOLID_STATE_RELAY class
+- SSRs are mapped to dedicated GPIO pins (see PIN_CONFIGURATION.h)
+- Hopper logic is now fully decoupled from relay logic, improving safety and maintainability
 
 #### Troubleshooting Checklist
 - [ ] Power supply voltages correct
