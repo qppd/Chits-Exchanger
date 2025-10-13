@@ -1,5 +1,3 @@
-# Requirements for Raspberry Pi 4B Chit Exchanger System with Teachable Machine
-# Supports both GUI (VNC/HDMI) and headless modes
 tflite-runtime>=2.8.0
 opencv-python>=4.5.0
 numpy>=1.21.0

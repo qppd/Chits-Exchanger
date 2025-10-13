@@ -16,17 +16,18 @@ except ImportError:
     print("Using tensorflow.lite")
 
 class ImageClassifier:
-    def __init__(self, model_path=None, labels_path=None):
+    def __init__(self, model_path=None, labels_path=None, camera_url="http://192.168.1.15/stream", enable_gui=False):
         """Initialize TensorFlow Lite classifier for Teachable Machine model"""
         
         # Default paths for Teachable Machine exported model
         if model_path is None:
-            model_path = os.path.join(os.path.dirname(__file__), '../../ml/converted_tflite_quantized/model.tflite')
+            model_path = os.path.join(os.path.dirname(__file__), '../../../ml/converted_tflite_quantized/model.tflite')
         if labels_path is None:
-            labels_path = os.path.join(os.path.dirname(__file__), '../../ml/converted_tflite_quantized/labels.txt')
+            labels_path = os.path.join(os.path.dirname(__file__), '../../../ml/converted_tflite_quantized/labels.txt')
             
         self.model_path = os.path.abspath(model_path)
         self.labels_path = os.path.abspath(labels_path)
+        self.camera_url = camera_url
         
         print(f"Loading model from: {self.model_path}")
         print(f"Loading labels from: {self.labels_path}")
@@ -56,21 +57,14 @@ class ImageClassifier:
             self.labels = self.load_teachable_machine_labels()
             print(f"Loaded {len(self.labels)} labels: {self.labels}")
             
-            # Check if running in GUI mode (display available)
-            self.gui_mode = self._check_display_available()
-            print(f"GUI mode available: {self.gui_mode}")
+            # Set GUI mode based on parameter and display availability
+            self.gui_mode = enable_gui and self._check_display_available()
+            print(f"GUI mode enabled: {self.gui_mode}")
             
-            # Initialize camera
-            self.camera = cv2.VideoCapture(0)
+            # Initialize IP camera
+            self.camera = cv2.VideoCapture(self.camera_url)
             if not self.camera.isOpened():
-                raise Exception("Could not open camera")
-                
-            # Set camera resolution for better quality
-            self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-            self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-            
-            # Enable auto-exposure and auto-white balance for better image quality
-            self.camera.set(cv2.CAP_PROP_AUTO_EXPOSURE, 0.25)  # Enable auto-exposure
+                raise Exception(f"Could not open IP camera at {self.camera_url}")
             
             # Warm up camera
             print("Warming up camera...")
@@ -198,6 +192,10 @@ class ImageClassifier:
             # Get prediction
             prediction_index = np.argmax(output_data[0])
             confidence = float(output_data[0][prediction_index])
+            
+            # Normalize confidence (it's coming from a quantized model)
+            if self.is_quantized:
+                confidence = confidence / 255.0
             
             # Convert to percentage
             confidence_percent = confidence * 100
@@ -341,12 +339,7 @@ class ImageClassifier:
 def test_classifier():
     """Test the classifier with Teachable Machine model"""
     try:
-        classifier = ImageClassifier()
-        
-        # Show live preview if in GUI mode
-        if classifier.gui_mode:
-            print("GUI mode detected - showing live preview first...")
-            classifier.show_live_preview(duration=5)
+        classifier = ImageClassifier(enable_gui=False)
         
         print("Testing classifier with 3 classifications...")
         prediction, confidence = classifier.classify_multiple_times(num_classifications=3)
