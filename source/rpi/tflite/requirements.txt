@@ -1,5 +1,9 @@
-# Requirements for Raspberry Pi 4B Chit Exchanger System
-tensorflow-lite-runtime==2.8.0
-opencv-python==4.5.5.64
-numpy==1.21.6
-RPi.GPIO==0.7.1
+# Requirements for Raspberry Pi 4B Chit Exchanger System with Teachable Machine
+# Supports both GUI (VNC/HDMI) and headless modes
+tflite-runtime>=2.8.0
+opencv-python>=4.5.0
+numpy>=1.21.0
+pillow>=8.0.0
+RPi.GPIO>=0.7.0
+gpiozero>=1.6.0
+matplotlib>=3.5.0
