@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import RPi.GPIO as GPIO
+import pigpio
 import smbus2
 import time
 import signal
@@ -9,7 +10,7 @@ import sys
 # Pin Configurations
 BUTTON_PIN = 27
 IR_PIN = 17
-SERVO_PIN = 18
+SERVO_PIN = 22
 
 # LCD Configuration
 LCD_ADDR = 0x27
@@ -81,22 +82,30 @@ class LCD:
 class ServoControl:
     def __init__(self, pin):
         self.pin = pin
-        GPIO.setup(pin, GPIO.OUT)
-        self.pwm = GPIO.PWM(pin, 50)  # 50Hz frequency
-        self.pwm.start(0)
+        self.pi = pigpio.pi()
+        if not self.pi.connected:
+            raise RuntimeError("Could not connect to pigpio daemon!")
+        self.current_angle = None
+    
+    def angle_to_pulse(self, angle):
+        # Map angle (0-180) to pulse width (500-2500us)
+        return int(500 + (angle / 180.0) * 2000)
     
     def set_angle(self, angle):
-        # More gentle servo movement
-        duty = angle / 18 + 2
-        # Start with a lower duty cycle and gradually increase
-        for d in range(0, int(duty * 10), 1):
-            self.pwm.ChangeDutyCycle(d/10)
-            time.sleep(0.01)
-        time.sleep(0.2)  # Hold at position
-        self.pwm.ChangeDutyCycle(0)  # Stop pulse to prevent jitter
+        # Ensure angle is at least 40 degrees
+        if angle < 40:
+            angle = 40
+        
+        # Only update if angle changed
+        if self.current_angle != angle:
+            pulse_width = self.angle_to_pulse(angle)
+            self.pi.set_servo_pulsewidth(self.pin, pulse_width)
+            self.current_angle = angle
+            time.sleep(0.3)  # Give servo time to move
     
     def cleanup(self):
-        self.pwm.stop()
+        self.pi.set_servo_pulsewidth(self.pin, 0)
+        self.pi.stop()
 
 class ButtonHandler:
     def __init__(self, pin, callback):
@@ -142,7 +151,9 @@ class AllTester:
         GPIO.setup(IR_PIN, GPIO.IN)
         
         self.running = True
-        self.servo_angle = 0
+        self.servo_angle = 40
+        # Move servo to home position (40 degrees)
+        self.servo.set_angle(40)
         self.last_button_state = None
         self.last_ir_state = None
         self.last_servo_angle = None
@@ -175,15 +186,21 @@ class AllTester:
         print("Testing all components...")
         print("- Button on GPIO 27")
         print("- IR Sensor on GPIO 17")
-        print("- Servo on GPIO 18")
+        print("- Servo on GPIO 22")
         print("Press Ctrl+C to exit")
         
         try:
             while self.running:
                 if not GPIO.input(BUTTON_PIN):  # Button pressed
-                    self.servo_angle = (self.servo_angle + 45) % 181
+                    # Move to 90 degrees when pressed
+                    self.servo_angle = 90
                     self.servo.set_angle(self.servo_angle)
                     time.sleep(0.2)  # Debounce
+                else:
+                    # Return to 40 degrees (home position) when not pressed
+                    if self.servo_angle != 40:
+                        self.servo_angle = 40
+                        self.servo.set_angle(self.servo_angle)
                 
                 self.update_display()
                 time.sleep(0.5)  # Reduced update frequency to prevent blinking
