@@ -297,14 +297,31 @@ The Chit Acceptor Servo Mount is a custom-designed 3D printable part used to sec
 
 The Chit Acceptor Hand is a 3D printable component designed to interact with chits/tokens during the acceptance process. The image (`model/Chit_Acceptor_Hand.png`) provides a reference for its shape and intended use in the chit handling mechanism.
 
+#### LCD Mount
+
+<div align="center">
+    <img src="model/Chit_Lcd_Mount.png" alt="Chit LCD Mount" width="350"/>
+</div>
+
+The Chit LCD Mount is a 3D printable mounting bracket designed to securely hold the 20x4 I2C LCD display. The provided image (`model/Chit_Lcd_Mount.png`) and files (`model/Chit_Lcd_Mount.stl`, `model/CE3V3SE_Chit_Lcd_Mount.gcode`) enable easy fabrication and integration into the system enclosure.
+
 ### Available 3D Model Files
 
 - **Fusion 360 Models (.f3d)**
   - `model/TB74.f3d` - TB74 Bill Acceptor 3D model
   - `model/ALLAN_COINSLOT.f3d` - ALLAN Coin Slot 3D model
+  - `model/QPPD4 v29.f3d` - Complete system design
+
+- **STL Files (3D Printable)**
+  - `model/Chit_Acceptor_Front.stl` - Front panel STL
+  - `model/Chit_Acceptor_Hand.stl` - Hand mechanism STL
+  - `model/Chit_Acceptor_Servo_Mount.stl` - Servo mount STL
+  - `model/Chit_Lcd_Mount.stl` - LCD mount STL
 
 - **G-code Files (Ready for 3D Printing)**
   - `model/CE3V3SE_Chit_Acceptor_Front.gcode` - Front panel for Creality Ender 3 V3 SE
+  - `model/CE3V3SE_Chit_Acceptor_Hand.gcode` - Hand mechanism for Creality Ender 3 V3 SE
+  - `model/CE3V3SE_Chit_Lcd_Mount.gcode` - LCD mount for Creality Ender 3 V3 SE
 
 - **Reference Images (.png)**
   - `model/TB74.png` - TB74 Bill Acceptor reference
@@ -313,6 +330,7 @@ The Chit Acceptor Hand is a 3D printable component designed to interact with chi
   - `model/Chit_Acceptor_Front.png` - Front panel reference
   - `model/Chit_Acceptor_Servo_Mount.png` - Servo mount reference
   - `model/Chit_Acceptor_Hand.png` - Hand mechanism reference
+  - `model/Chit_Lcd_Mount.png` - LCD mount reference
 
 ## System Architecture
 
