@@ -1,25 +1,3 @@
-### Chit Acceptor Front
-
-<div align="center">
-    <img src="model/Chit_Acceptor_Front.png" alt="Chit Acceptor Front" width="350"/>
-</div>
-
-The Chit Acceptor Front is a 3D printable front panel designed for the chit acceptor mechanism. The image (`model/Chit_Acceptor_Front.png`) provides a visual reference for the part, complementing the G-code file (`model/CE3V3SE_Chit_Acceptor_Front.gcode`) used for fabrication. This component is intended for hardware integration and enclosure assembly.
-### Chit Acceptor Servo Mount
-
-<div align="center">
-    <img src="model/Chit_Acceptor_Servo_Mount.png" alt="Chit Acceptor Servo Mount" width="350"/>
-</div>
-
-The Chit Acceptor Servo Mount is a custom-designed 3D printable part used to securely mount the servo motor for the chit acceptor mechanism. The provided image (`model/Chit_Acceptor_Servo_Mount.png`) serves as a visual reference for assembly and integration into the hardware enclosure.
-
-### Chit Acceptor Hand
-
-<div align="center">
-    <img src="model/Chit_Acceptor_Hand.png" alt="Chit Acceptor Hand" width="350"/>
-</div>
-
-The Chit Acceptor Hand is a 3D printable component designed to interact with chits/tokens during the acceptance process. The image (`model/Chit_Acceptor_Hand.png`) provides a reference for its shape and intended use in the chit handling mechanism.
 # IoT Chits Exchanger
 
 <div align="center">
@@ -35,6 +13,7 @@ The Chit Acceptor Hand is a 3D printable component designed to interact with chi
 - [Overview](#overview)
 - [Features](#features)
 - [Hardware Components](#hardware-components)
+- [3D Models & Hardware References](#3d-models--hardware-references)
 - [System Architecture](#system-architecture)
 - [Pin Configuration](#pin-configuration)
 - [Software Architecture](#software-architecture)
@@ -180,31 +159,6 @@ The **IoT Chits Exchanger** is an intelligent, dual-platform automated currency 
 | **Piezo Buzzer** | 5V Active Buzzer | 1 | Audio feedback |
 | **Power Supply** | 5V/12V Dual Rail | 1 | System power |
 
-
-### TB74 Bill Acceptor Model
-
-<div align="center">
-    <img src="model/TB74.png" alt="TB74 Bill Acceptor Model" width="350"/>
-</div>
-
-The TB74 is a professional bill acceptor module used for reliable bill validation and acceptance in automated vending and exchange systems. The included 3D model (`model/TB74.f3d`) and image (`model/TB74.png`) provide reference for hardware integration and enclosure design.
-
-### ALLAN Coin Slot Model
-
-<div align="center">
-    <img src="model/ALLAN_COINSLOT.png" alt="ALLAN Coin Slot Model" width="350"/>
-</div>
-
-The ALLAN Coin Slot is a professional-grade coin input module designed for high-accuracy coin detection and integration with ALLAN hoppers. The provided 3D model (`model/ALLAN_COINSLOT.f3d`) and image (`model/ALLAN_COINSLOT.png`) assist with hardware design and system assembly.
-
-### CE3V3SE Chit Acceptor Front (G-code Model)
-
-<div align="center">
-    <!-- If you have an image, add it here: <img src="model/CE3V3SE_Chit_Acceptor_Front.png" alt="CE3V3SE Chit Acceptor Front" width="350"/> -->
-</div>
-
-The CE3V3SE Chit Acceptor Front is a 3D printable front panel designed for the chit acceptor mechanism. The provided G-code file (`model/CE3V3SE_Chit_Acceptor_Front.gcode`) can be used directly with compatible 3D printers (e.g., Creality Ender 3 V3 SE) to fabricate the part for hardware integration and enclosure assembly.
-
 ### Raspberry Pi Platform (Chits to Coins)
 
 | Component | Model/Type | Quantity | Function |
@@ -288,6 +242,77 @@ Common Commands:
 - **Brightness**: Adjustable intensity (PWM controlled)
 - **Coverage**: Even illumination across scanning area
 - **Power**: 12V LED strips with dimming capability
+
+## 3D Models & Hardware References
+
+This section provides visual references and 3D models for custom hardware components used in the Chits Exchanger system.
+
+### TB74 Bill Acceptor Model
+
+<div align="center">
+    <img src="model/TB74.png" alt="TB74 Bill Acceptor Model" width="350"/>
+</div>
+
+The TB74 is a professional bill acceptor module used for reliable bill validation and acceptance in automated vending and exchange systems. The included 3D model (`model/TB74.f3d`) and image (`model/TB74.png`) provide reference for hardware integration and enclosure design.
+
+### ALLAN Coin Slot Model
+
+<div align="center">
+    <img src="model/ALLAN_COINSLOT.png" alt="ALLAN Coin Slot Model" width="350"/>
+</div>
+
+The ALLAN Coin Slot is a professional-grade coin input module designed for high-accuracy coin detection and integration with ALLAN hoppers. The provided 3D model (`model/ALLAN_COINSLOT.f3d`) and image (`model/ALLAN_COINSLOT.png`) assist with hardware design and system assembly.
+
+### Chit Acceptor Assembly
+
+#### Full Chit Acceptor Assembly
+
+<div align="center">
+    <img src="model/Chit_Acceptor_Back_View.png" alt="Chit Acceptor Back View - Full Assembly" width="500"/>
+</div>
+
+Complete back view of the assembled chit acceptor mechanism showing the integration of all components including the servo mount, hand mechanism, and front panel. This image (`model/Chit_Acceptor_Back_View.png`) provides a comprehensive reference for complete hardware assembly.
+
+#### Chit Acceptor Front Panel
+
+<div align="center">
+    <img src="model/Chit_Acceptor_Front.png" alt="Chit Acceptor Front Panel" width="350"/>
+</div>
+
+The Chit Acceptor Front is a 3D printable front panel designed for the chit acceptor mechanism. The image (`model/Chit_Acceptor_Front.png`) provides a visual reference for the part, complementing the G-code file (`model/CE3V3SE_Chit_Acceptor_Front.gcode`) used for fabrication with compatible 3D printers (e.g., Creality Ender 3 V3 SE).
+
+#### Chit Acceptor Servo Mount
+
+<div align="center">
+    <img src="model/Chit_Acceptor_Servo_Mount.png" alt="Chit Acceptor Servo Mount" width="350"/>
+</div>
+
+The Chit Acceptor Servo Mount is a custom-designed 3D printable part used to securely mount the servo motor for the chit acceptor mechanism. The provided image (`model/Chit_Acceptor_Servo_Mount.png`) serves as a visual reference for assembly and integration into the hardware enclosure.
+
+#### Chit Acceptor Hand
+
+<div align="center">
+    <img src="model/Chit_Acceptor_Hand.png" alt="Chit Acceptor Hand" width="350"/>
+</div>
+
+The Chit Acceptor Hand is a 3D printable component designed to interact with chits/tokens during the acceptance process. The image (`model/Chit_Acceptor_Hand.png`) provides a reference for its shape and intended use in the chit handling mechanism.
+
+### Available 3D Model Files
+
+- **Fusion 360 Models (.f3d)**
+  - `model/TB74.f3d` - TB74 Bill Acceptor 3D model
+  - `model/ALLAN_COINSLOT.f3d` - ALLAN Coin Slot 3D model
+
+- **G-code Files (Ready for 3D Printing)**
+  - `model/CE3V3SE_Chit_Acceptor_Front.gcode` - Front panel for Creality Ender 3 V3 SE
+
+- **Reference Images (.png)**
+  - `model/TB74.png` - TB74 Bill Acceptor reference
+  - `model/ALLAN_COINSLOT.png` - ALLAN Coin Slot reference
+  - `model/Chit_Acceptor_Back_View.png` - Complete chit acceptor assembly
+  - `model/Chit_Acceptor_Front.png` - Front panel reference
+  - `model/Chit_Acceptor_Servo_Mount.png` - Servo mount reference
+  - `model/Chit_Acceptor_Hand.png` - Hand mechanism reference
 
 ## System Architecture
 
