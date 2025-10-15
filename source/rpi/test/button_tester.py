@@ -6,7 +6,7 @@ import signal
 import sys
 
 # GPIO pin for the tactile button
-BUTTON_PIN = 17
+BUTTON_PIN = 27
 
 def setup():
     # Set GPIO mode to BCM

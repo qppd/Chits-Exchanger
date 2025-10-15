@@ -1,32 +1,31 @@
 # servo_tester.py
 # Simple script to test servo motor functionality
 
+
+
+
 import time
-import RPi.GPIO as GPIO
+import pigpio
 
-SERVO_PIN = 18  # Change as needed
+PIN = 22  # BCM numbering
 
-GPIO.setmode(GPIO.BCM)
-GPIO.setup(SERVO_PIN, GPIO.OUT)
-
-pwm = GPIO.PWM(SERVO_PIN, 50)  # 50Hz for servo
-pwm.start(0)
+pi = pigpio.pi()
+if not pi.connected:
+    print("Could not connect to pigpio daemon!")
+    exit(1)
 
 try:
     while True:
-        for angle in range(0, 181, 10):
-            duty = 2 + (angle / 18)
-            pwm.ChangeDutyCycle(duty)
-            print(f"Angle: {angle} -> Duty Cycle: {duty}")
-            time.sleep(0.5)
-        for angle in range(180, -1, -10):
-            duty = 2 + (angle / 18)
-            pwm.ChangeDutyCycle(duty)
-            print(f"Angle: {angle} -> Duty Cycle: {duty}")
-            time.sleep(0.5)
+        print("GPIO22 HIGH")
+        pi.write(PIN, 1)
+        time.sleep(5)
+        print("GPIO22 LOW")
+        pi.write(PIN, 0)
+        time.sleep(5)
 except KeyboardInterrupt:
     pass
 finally:
-    pwm.stop()
-    GPIO.cleanup()
+    pi.write(PIN, 0)
+    pi.stop()
+    
     print("Servo test finished.")

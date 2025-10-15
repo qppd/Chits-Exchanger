@@ -6,7 +6,7 @@ import signal
 import sys
 
 # GPIO pin for IR sensor
-IR_SENSOR_PIN = 27
+IR_SENSOR_PIN = 17
 
 def setup():
     # Set GPIO mode to BCM
