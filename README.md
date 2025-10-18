@@ -304,26 +304,51 @@ The Chit Acceptor Hand is a 3D printable component designed to interact with chi
 </div>
 
 The Chit LCD Mount is a 3D printable mounting bracket designed to securely hold the 20x4 I2C LCD display. The provided image (`model/Chit_Lcd_Mount.png`) and files (`model/Chit_Lcd_Mount.stl`, `model/CE3V3SE_Chit_Lcd_Mount.gcode`) enable easy fabrication and integration into the system enclosure.
+#### Chit Dispenser Servo Mount
+
+<div align="center">
+    <img src="model/Chit_Dispenser_Servo_Mount.png" alt="Chit Dispenser Servo Mount" width="350"/>
+</div>
+
+The Chit Dispenser Servo Mount is a custom 3D printable part designed to securely hold the servo motor for the chit dispensing mechanism. The provided image (`model/Chit_Dispenser_Servo_Mount.png`) and model file (`model/Chit_Dispenser_Servo_Mount.stl`) serve as references for assembly and integration.
+
+#### Chit Dispenser Servo Roller
+
+<div align="center">
+    <img src="model/Chit_Dispenser_Servo_Roller.png" alt="Chit Dispenser Servo Roller" width="350"/>
+</div>
+
+The Chit Dispenser Servo Roller is a 3D printable roller component used in the chit dispensing system. The image (`model/Chit_Dispenser_Servo_Roller.png`) and model file (`model/Chit_Dispenser_Servo_Roller.stl`) provide reference for fabrication and installation.
+
+#### Chit Dispenser Storage
+
+<div align="center">
+    <img src="model/Chit_Dispenser_Storage.png" alt="Chit Dispenser Storage" width="350"/>
+</div>
+
+The Chit Dispenser Storage is a 3D printable storage compartment for holding chits/tokens before dispensing. The image (`model/Chit_Dispenser_Storage.png`) and model file (`model/Chit_Dispenser_Storage.stl`) provide reference for hardware integration and enclosure design.
 
 ### Available 3D Model Files
 
-- **Fusion 360 Models (.f3d)**
   - `model/TB74.f3d` - TB74 Bill Acceptor 3D model
   - `model/ALLAN_COINSLOT.f3d` - ALLAN Coin Slot 3D model
   - `model/QPPD4 v29.f3d` - Complete system design
+    - `model/Chit_Dispenser_Servo_Mount.f3d` - Chit Dispenser Servo Mount 3D model
+    - `model/Chit_Dispenser_Storage.f3d` - Chit Dispenser Storage 3D model
 
-- **STL Files (3D Printable)**
   - `model/Chit_Acceptor_Front.stl` - Front panel STL
   - `model/Chit_Acceptor_Hand.stl` - Hand mechanism STL
   - `model/Chit_Acceptor_Servo_Mount.stl` - Servo mount STL
   - `model/Chit_Lcd_Mount.stl` - LCD mount STL
+    - `model/Chit_Dispenser_Servo_Mount.stl` - Dispenser servo mount STL
+    - `model/Chit_Dispenser_Servo_Roller.stl` - Dispenser servo roller STL
+    - `model/Chit_Dispenser_Storage.stl` - Chit storage STL
 
-- **G-code Files (Ready for 3D Printing)**
   - `model/CE3V3SE_Chit_Acceptor_Front.gcode` - Front panel for Creality Ender 3 V3 SE
   - `model/CE3V3SE_Chit_Acceptor_Hand.gcode` - Hand mechanism for Creality Ender 3 V3 SE
   - `model/CE3V3SE_Chit_Lcd_Mount.gcode` - LCD mount for Creality Ender 3 V3 SE
+    - `model/CE3V3SE_Chit_Dispenser_Servo_Mount.gcode` - Dispenser servo mount for Creality Ender 3 V3 SE
 
-- **Reference Images (.png)**
   - `model/TB74.png` - TB74 Bill Acceptor reference
   - `model/ALLAN_COINSLOT.png` - ALLAN Coin Slot reference
   - `model/Chit_Acceptor_Back_View.png` - Complete chit acceptor assembly
@@ -331,6 +356,9 @@ The Chit LCD Mount is a 3D printable mounting bracket designed to securely hold 
   - `model/Chit_Acceptor_Servo_Mount.png` - Servo mount reference
   - `model/Chit_Acceptor_Hand.png` - Hand mechanism reference
   - `model/Chit_Lcd_Mount.png` - LCD mount reference
+    - `model/Chit_Dispenser_Servo_Mount.png` - Dispenser servo mount reference
+    - `model/Chit_Dispenser_Servo_Roller.png` - Dispenser servo roller reference
+    - `model/Chit_Dispenser_Storage.png` - Chit storage reference
 
 ## System Architecture
 
