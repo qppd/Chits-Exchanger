@@ -328,6 +328,14 @@ The Chit Dispenser Servo Roller is a 3D printable roller component used in the c
 
 The Chit Dispenser Storage is a 3D printable storage compartment for holding chits/tokens before dispensing. The image (`model/Chit_Dispenser_Storage.png`) and model file (`model/Chit_Dispenser_Storage.stl`) provide reference for hardware integration and enclosure design.
 
+#### Chit Dispenser Full View (Assembly)
+
+<div align="center">
+    <img src="model/Chit_Dispenser_Full_View.png" alt="Chit Dispenser Full View - Assembly" width="500"/>
+</div>
+
+This image (`model/Chit_Dispenser_Full_View.png`) shows the complete assembled chit dispenser, which joins the storage, dispenser servo mount, and dispenser servo roller into a single integrated unit. Use this as a reference for the full hardware assembly and integration of the chit dispensing mechanism.
+
 ### Available 3D Model Files
 
   - `model/TB74.f3d` - TB74 Bill Acceptor 3D model
@@ -359,6 +367,7 @@ The Chit Dispenser Storage is a 3D printable storage compartment for holding chi
     - `model/Chit_Dispenser_Servo_Mount.png` - Dispenser servo mount reference
     - `model/Chit_Dispenser_Servo_Roller.png` - Dispenser servo roller reference
     - `model/Chit_Dispenser_Storage.png` - Chit storage reference
+    - `model/Chit_Dispenser_Full_View.png` - Chit dispenser full assembly reference
 
 ## System Architecture
 
