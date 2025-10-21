@@ -2892,20 +2892,7 @@ copies or substantial portions of the Software.
 
 ---
 
-### 🆘 Support Options
-
-#### 🔧 Technical Support
-- **GitHub Issues**: Report bugs and request features
-- **Email Support**: Technical questions and troubleshooting
-- **Community Forum**: Join discussions with other developers
-
-#### 📚 Documentation
-- **Wiki**: Comprehensive documentation and tutorials
-- **API Reference**: Complete function and class documentation
-- **Video Tutorials**: Step-by-step video guides
-
 #### 🤝 Community
-- **Discord Server**: Real-time chat and support
 - **Facebook Group**: Community discussions and updates
 - **YouTube Channel**: Project demonstrations and tutorials
 
