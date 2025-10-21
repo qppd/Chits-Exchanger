@@ -48,12 +48,10 @@ The chit dispensing system has been completely redesigned to use **dual-servo pa
 - ✅ **Added testing commands**: `TEST` and `TESTALL` for diagnostics
 - ✅ **Full servo deactivation** (PWM=0) when idle to prevent unwanted movement
 
-**Benefits:**
-- 🚀 **Double the torque** for more reliable chit dispensing
-- 🔄 **Redundancy** - if one servo has issues, the paired servo assists
+**Benefits:**          
 - ⚡ **Faster dispensing** with simultaneous servo operation
 - 🎯 **More consistent** chit delivery with dual-motor push
-- 🛡️ **Better reliability** in high-volume operations
+
 
 #### Expanded 3D Model Library
 Added comprehensive 3D printable models and reference files:
@@ -75,7 +73,7 @@ Added comprehensive 3D printable models and reference files:
 - 🔧 **PIN_CONFIGURATION.h** - Added 8 servo channel definitions
 - 🔧 **SERVO_DISPENSER.h/.cpp** - Implemented dual-servo pair control
 - 🔧 **ChitExchanger.ino** - Updated main loop with new test commands
-- 🔧 **Enhanced documentation** - SERVO_PAIR_CONFIGURATION.md added
+- 🔧 **Enhanced documentation** - Comprehensive servo reference guide integrated into README
 
 #### Documentation Updates
 - 📚 Comprehensive servo configuration guide
@@ -2913,8 +2911,115 @@ copies or substantial portions of the Software.
 
 ---
 
-### 🌟 Acknowledgments
+## 📘 Servo System Quick Reference
 
+### Power On Checklist
+✅ External 5V/4A+ power supply connected to PCA9685  
+✅ All grounds connected (ESP32, PCA9685, Power Supply)  
+✅ I2C connections verified (SDA=GPIO21, SCL=GPIO22)  
+✅ 8 servos connected to channels 0-7
+
+### Test Commands
+```bash
+Serial Monitor @ 9600 baud:
+TEST     → Test ₱10 pair (channels 4 & 5) for 0.8s
+TESTALL  → Test all 4 pairs sequentially
+```
+
+### Channel Mapping Reference
+
+| Denomination | Pair | Ch1 | Ch2 | Duration |
+|--------------|------|-----|-----|----------|
+| ₱50          | 1    | 0   | 1   | 800ms    |
+| ₱20          | 2    | 2   | 3   | 700ms    |
+| ₱10          | 3    | 4   | 5   | 600ms    |
+| ₱5           | 4    | 6   | 7   | 500ms    |
+
+### Code Constants
+```cpp
+// PWM Values
+SERVO_FORWARD  = 450  // Clockwise rotation
+SERVO_BACKWARD = 300  // Counter-clockwise
+SERVO_STOP     = 375  // Neutral (1.5ms pulse)
+DEACTIVATED    = 0    // No PWM signal
+
+// I2C Addresses
+PCA9685_ADDR = 0x40   // PWM Driver
+LCD_ADDR     = 0x27   // 20x4 LCD Display
+
+// Dispense Durations
+DISPENSE_DURATION_5  = 500   // ₱5 chits
+DISPENSE_DURATION_10 = 600   // ₱10 chits
+DISPENSE_DURATION_20 = 700   // ₱20 chits
+DISPENSE_DURATION_50 = 800   // ₱50 chits
+```
+
+### Quick Troubleshooting
+**Servos Don't Move**: Check external 5V power, verify I2C (0x40), check serial output  
+**Only One Servo Works**: Verify channel wiring, test servo power connection  
+**Weak Dispensing**: Increase duration, check 5V ±0.2V power supply  
+**Erratic Movement**: Ensure PWM=0 when idle, check for power noise, add 1000µF capacitor
+
+---
+
+## 📜 Version History
+
+### Version 2.0.0 - October 21, 2025
+
+#### � Major Release: Dual-Servo Dispensing System
+
+**Hardware Enhancements**
+- ✨ Upgraded from 4 servos to **8 servos (4 pairs)**
+- ✨ Each denomination uses 2 servos working simultaneously
+- ✨ Doubled torque for more reliable chit dispensing
+- ✨ Built-in redundancy for increased system reliability
+- ✨ New channel mapping: ₱50 (0&1), ₱20 (2&3), ₱10 (4&5), ₱5 (6&7)
+
+**Software Features**
+- ✨ New `dispenseCardPair()` function - operates both servos simultaneously
+- ✨ New `testAdditionalServos()` - tests ₱10 servo pair
+- ✨ New `testAllServoPairs()` - tests all 4 pairs sequentially
+- ✨ Serial commands: `TEST` and `TESTALL`
+- ✨ Enhanced PIN_CONFIGURATION.h with 8 channel definitions
+- ✨ Backward compatible legacy channel definitions
+
+**3D Models & Hardware**
+- ✨ New STL files: Camera Mount, Wall Guide
+- ✨ New G-code files: ESP32-CAM Case, Dispenser Roller
+- ✨ Complete reference images for assembly
+
+**Performance Improvements**
+- 🚀 Faster chit delivery with simultaneous dual-servo operation
+- 🚀 Reduced failure rate with redundant servo system
+- 🚀 Doubled mechanical force for consistent chit pushing
+- 🚀 More uniform chit delivery across all denominations
+
+**Code Changes**
+- 🔧 SERVO_DISPENSER.h/.cpp: Complete redesign for dual-servo operation
+- 🔧 ChitExchanger.ino: Updated dispensing logic for servo pairs
+- 🔧 initSERVO() now initializes 8 channels (previously 4)
+- 🔧 Enhanced serial output with channel pair information
+
+**Power Requirements**
+- ⚡ Updated from 2A to 4A for 8 servos
+- ⚡ PCA9685 now using 8 of 16 available channels
+- ⚡ 8 unused channels available for future expansion
+
+**Migration Notes**
+- ✅ Backward compatible with existing code
+- ✅ Legacy definitions maintained (CHIT_X_CHANNEL maps to first servo)
+- ✅ Can operate with 4 or 8 servos (graceful degradation)
+- ✅ No breaking changes
+
+### Version 1.0.0 - Previous Version
+- Initial release with single-servo dispensing system
+- 4 servos, 1 per denomination
+- Basic PCA9685 control
+- Standard dispensing functionality
+
+---
+
+### 🌟 Acknowledgments
 
 Special thanks to:
 - **Arduino Community** for the excellent development platform
