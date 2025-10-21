@@ -66,7 +66,11 @@ void setup() {
   Serial.println("- Chit values: P5, P10, P20, P50");
   Serial.println("- Bills accepted: P20, P50");
   Serial.println("- Coins accepted: P1, P5, P10, P20");
-  Serial.println("- Using existing SERVO_DISPENSER for chit dispensing");
+  Serial.println("- Using 8 servos (4 pairs) for chit dispensing");
+  Serial.println("");
+  Serial.println("Serial Commands:");
+  Serial.println("- Type 'TEST' to test ₱10 servo pair (channels 4 & 5)");
+  Serial.println("- Type 'TESTALL' to test all servo pairs");
 }
 
 // Calculate optimal chit combination for given credit amount
@@ -99,15 +103,15 @@ ChitDispense calculateOptimalChits(int creditAmount) {
   return result;
 }
 
-// Dispense individual chit type
-void dispenseChitType(int channel, int count, int chitValue) {
+// Dispense individual chit type using servo pair
+void dispenseChitType(int channel1, int channel2, int count, int chitValue) {
   if (count <= 0) return;
   
   for (int i = 0; i < count; i++) {
     updateDispensingDisplay(chitValue, i + 1, false);
     
-    // Use timing-based dispensing for 360-degree servos
-    dispenseCard(channel, chitValue);
+    // Use timing-based dispensing with both servos for 360-degree servos
+    dispenseCardPair(channel1, channel2, chitValue);
     
     playDispensingFeedback(chitValue, i + 1);
     delay(300); // Short delay between dispensing individual chits
@@ -139,28 +143,28 @@ void dispenseChits(ChitDispense dispensePlan) {
   playTone(1500, 200);
   delay(300);
   
-  // Dispense ₱50 chits
+  // Dispense ₱50 chits using servo pair (channels 0 & 1)
   if (dispensePlan.chits_50 > 0) {
     Serial.printf("Dispensing %d x ₱50 chits...\n", dispensePlan.chits_50);
-    dispenseChitType(CHIT_50_CHANNEL, dispensePlan.chits_50, CHIT_VALUE_50);
+    dispenseChitType(CHIT_50_CHANNEL_1, CHIT_50_CHANNEL_2, dispensePlan.chits_50, CHIT_VALUE_50);
   }
   
-  // Dispense ₱20 chits
+  // Dispense ₱20 chits using servo pair (channels 2 & 3)
   if (dispensePlan.chits_20 > 0) {
     Serial.printf("Dispensing %d x ₱20 chits...\n", dispensePlan.chits_20);
-    dispenseChitType(CHIT_20_CHANNEL, dispensePlan.chits_20, CHIT_VALUE_20);
+    dispenseChitType(CHIT_20_CHANNEL_1, CHIT_20_CHANNEL_2, dispensePlan.chits_20, CHIT_VALUE_20);
   }
   
-  // Dispense ₱10 chits
+  // Dispense ₱10 chits using servo pair (channels 4 & 5)
   if (dispensePlan.chits_10 > 0) {
     Serial.printf("Dispensing %d x ₱10 chits...\n", dispensePlan.chits_10);
-    dispenseChitType(CHIT_10_CHANNEL, dispensePlan.chits_10, CHIT_VALUE_10);
+    dispenseChitType(CHIT_10_CHANNEL_1, CHIT_10_CHANNEL_2, dispensePlan.chits_10, CHIT_VALUE_10);
   }
   
-  // Dispense ₱5 chits
+  // Dispense ₱5 chits using servo pair (channels 6 & 7)
   if (dispensePlan.chits_5 > 0) {
     Serial.printf("Dispensing %d x ₱5 chits...\n", dispensePlan.chits_5);
-    dispenseChitType(CHIT_5_CHANNEL, dispensePlan.chits_5, CHIT_VALUE_5);
+    dispenseChitType(CHIT_5_CHANNEL_1, CHIT_5_CHANNEL_2, dispensePlan.chits_5, CHIT_VALUE_5);
   }
   
   // Dispensing complete
@@ -244,6 +248,22 @@ void triggerAutoDispensing() {
 }
 
 void loop() {
+  // Check for serial commands
+  if (Serial.available() > 0) {
+    String command = Serial.readStringUntil('\n');
+    command.trim();
+    command.toUpperCase();
+    
+    if (command == "TEST") {
+      Serial.println("Received TEST command - Testing ₱10 servo pair...");
+      testAdditionalServos();
+    }
+    else if (command == "TESTALL") {
+      Serial.println("Received TESTALL command - Testing all servo pairs...");
+      testAllServoPairs();
+    }
+  }
+  
   // Skip processing if dispensing is in progress
   if (dispensingInProgress) {
     delay(100);

@@ -51,12 +51,17 @@ void initSERVO() {
   delay(10);
   
   // Deactivate all servo outputs (set PWM to 0)
-  for (int i = 0; i < 4; i++) {
+  for (int i = 0; i < 8; i++) {  // Updated to support channels 0-7 (8 servos)
     pwm.setPWM(i, 0, 0);
   }
   
   Serial.println("PCA9685 Initialized - 360° Servo Mode");
-  Serial.println("Servo channels 0-3 ready for card dispensing");
+  Serial.println("Servo channels 0-7 ready for card dispensing");
+  Serial.println("Configuration:");
+  Serial.println("  ₱50 chits: Channels 0 & 1");
+  Serial.println("  ₱20 chits: Channels 2 & 3");
+  Serial.println("  ₱10 chits: Channels 4 & 5");
+  Serial.println("  ₱5 chits:  Channels 6 & 7");
 }
 
 // ========================================
@@ -134,6 +139,60 @@ void dispenseCard(int channel, int chitValue) {
   delay(100);
 }
 
+// Dispense card using both servos in a pair (runs simultaneously)
+void dispenseCardPair(int channel1, int channel2, int chitValue) {
+  int duration;
+  
+  // Get duration based on chit value
+  switch (chitValue) {
+    case 5:
+      duration = DISPENSE_DURATION_5;
+      break;
+    case 10:
+      duration = DISPENSE_DURATION_10;
+      break;
+    case 20:
+      duration = DISPENSE_DURATION_20;
+      break;
+    case 50:
+      duration = DISPENSE_DURATION_50;
+      break;
+    default:
+      Serial.println("Invalid chit value!");
+      return;
+  }
+  
+  Serial.print("Dispensing ₱");
+  Serial.print(chitValue);
+  Serial.print(" chit using channels ");
+  Serial.print(channel1);
+  Serial.print(" & ");
+  Serial.print(channel2);
+  Serial.print(" for ");
+  Serial.print(duration);
+  Serial.println("ms");
+  
+  // Start both servos simultaneously
+  setServoSpeed(channel1, SERVO_FORWARD);
+  setServoSpeed(channel2, SERVO_FORWARD);
+  
+  // Wait for specified duration
+  delay(duration);
+  
+  // Stop both servos
+  stopServo(channel1);
+  stopServo(channel2);
+  
+  Serial.print("Both servos on channels ");
+  Serial.print(channel1);
+  Serial.print(" & ");
+  Serial.print(channel2);
+  Serial.println(" stopped");
+  
+  // Small delay between operations
+  delay(100);
+}
+
 // ========================================
 // LEGACY: ANGLE-BASED FUNCTIONS (COMPATIBILITY)
 // ========================================
@@ -169,4 +228,56 @@ void operateSERVO(int channel, int startAngle, int endAngle, int speed) {
   }
 
   setServoAngle(channel, endAngle);  // Ensure it reaches the exact endAngle
+}
+
+// ========================================
+// TEST FUNCTION FOR ADDITIONAL SERVOS
+// ========================================
+
+// Test function for servo channels 4 and 5 (₱10 pair)
+void testAdditionalServos() {
+  Serial.println("=== TESTING ₱10 SERVO PAIR ===");
+  Serial.println("Starting test sequence for channels 4 and 5...");
+  
+  // Start both servos simultaneously - CW (Clockwise) for 0.8 seconds
+  Serial.println("Testing Servo Channels 4 and 5 (both CW for 0.8 seconds)...");
+  setServoSpeed(CHIT_10_CHANNEL_1, SERVO_FORWARD);  // Start Channel 4 CW
+  setServoSpeed(CHIT_10_CHANNEL_2, SERVO_FORWARD);  // Start Channel 5 CW
+  
+  delay(800);  // Both run together for 0.8 seconds
+  
+  // Stop both servos
+  stopServo(CHIT_10_CHANNEL_1);
+  stopServo(CHIT_10_CHANNEL_2);
+  Serial.println("Both servos stopped");
+  
+  Serial.println("=== TEST SEQUENCE COMPLETE ===");
+}
+
+// Test all 4 pairs of servos
+void testAllServoPairs() {
+  Serial.println("=== TESTING ALL SERVO PAIRS ===");
+  Serial.println("Testing all 8 servos (4 pairs)...");
+  
+  // Test ₱50 pair (Channels 0 & 1)
+  Serial.println("\n--- Testing ₱50 Pair (Channels 0 & 1) ---");
+  dispenseCardPair(CHIT_50_CHANNEL_1, CHIT_50_CHANNEL_2, CHIT_VALUE_50);
+  delay(1000);
+  
+  // Test ₱20 pair (Channels 2 & 3)
+  Serial.println("\n--- Testing ₱20 Pair (Channels 2 & 3) ---");
+  dispenseCardPair(CHIT_20_CHANNEL_1, CHIT_20_CHANNEL_2, CHIT_VALUE_20);
+  delay(1000);
+  
+  // Test ₱10 pair (Channels 4 & 5)
+  Serial.println("\n--- Testing ₱10 Pair (Channels 4 & 5) ---");
+  dispenseCardPair(CHIT_10_CHANNEL_1, CHIT_10_CHANNEL_2, CHIT_VALUE_10);
+  delay(1000);
+  
+  // Test ₱5 pair (Channels 6 & 7)
+  Serial.println("\n--- Testing ₱5 Pair (Channels 6 & 7) ---");
+  dispenseCardPair(CHIT_5_CHANNEL_1, CHIT_5_CHANNEL_2, CHIT_VALUE_5);
+  delay(1000);
+  
+  Serial.println("\n=== ALL SERVO PAIRS TEST COMPLETE ===");
 }

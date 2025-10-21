@@ -24,8 +24,13 @@ void scanI2CDevices(); // I2C device scanner for debugging
 void initSERVO();
 void setServoSpeed(int channel, int speed); // speed: SERVO_STOP, SERVO_FORWARD, SERVO_BACKWARD
 void operateServoTimed(int channel, int direction, int duration); // New timing-based function
-void dispenseCard(int channel, int chitValue); // Dispense specific chit value
+void dispenseCard(int channel, int chitValue); // Dispense specific chit value (single servo)
+void dispenseCardPair(int channel1, int channel2, int chitValue); // Dispense using servo pair
 void stopServo(int channel); // Stop specific servo
+
+// Test functions
+void testAdditionalServos(); // Test function for servo channels 4 and 5
+void testAllServoPairs(); // Test all 4 pairs of servos
 
 // Legacy angle-based functions (kept for compatibility)
 void setServoAngle(int channel, int angle);
