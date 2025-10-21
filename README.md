@@ -10,6 +10,7 @@
 </div>
 
 ## Table of Contents
+- [Recent Updates](#recent-updates)
 - [Overview](#overview)
 - [Features](#features)
 - [Hardware Components](#hardware-components)
@@ -26,6 +27,70 @@
 - [Contributing](#contributing)
 - [License](#license)
 - [Contact & Support](#contact--support)
+
+## 🆕 Recent Updates
+
+### Version 2.0 - Dual-Servo Dispenser Enhancement (October 2025)
+
+#### Major Hardware Upgrade: 8-Servo Dispensing System
+The chit dispensing system has been completely redesigned to use **dual-servo pairs** for significantly improved performance and reliability.
+
+**Key Changes:**
+- ✅ **Upgraded from 4 servos to 8 servos** (4 pairs, 2 per denomination)
+- ✅ **Synchronized dual-servo operation** for increased torque and reliability
+- ✅ **New channel mapping** optimized for denomination layout:
+  - ₱50 Chits: Channels 0 & 1
+  - ₱20 Chits: Channels 2 & 3
+  - ₱10 Chits: Channels 4 & 5
+  - ₱5 Chits: Channels 6 & 7
+- ✅ **Enhanced SERVO_DISPENSER module** with new `dispenseCardPair()` function
+- ✅ **Time-based dispensing** with denomination-specific durations (500-800ms)
+- ✅ **Added testing commands**: `TEST` and `TESTALL` for diagnostics
+- ✅ **Full servo deactivation** (PWM=0) when idle to prevent unwanted movement
+
+**Benefits:**
+- 🚀 **Double the torque** for more reliable chit dispensing
+- 🔄 **Redundancy** - if one servo has issues, the paired servo assists
+- ⚡ **Faster dispensing** with simultaneous servo operation
+- 🎯 **More consistent** chit delivery with dual-motor push
+- 🛡️ **Better reliability** in high-volume operations
+
+#### Expanded 3D Model Library
+Added comprehensive 3D printable models and reference files:
+
+**New Model Files:**
+- 📐 `Chit_Camera_Mount.stl` - Camera mounting bracket for RPi system
+- 📐 `Chit_Acceptor_Wall_Guide.stl` - Chit insertion guide rails
+- 📐 `CE3V3SE_ESP32-CAM_-_ESP32-CAM-MB_Case.gcode` - ESP32-CAM protective case
+- 📐 `CE3V3SE_Chit_Dispenser_Servo_Roller.gcode` - Ready-to-print roller component
+- 🖼️ Additional reference images for all new components
+
+**Model Organization:**
+- All STL files for universal 3D printing compatibility
+- G-code files pre-sliced for Creality Ender 3 V3 SE printers
+- Reference PNG images for assembly guidance
+- Fusion 360 source files (.f3d) for customization
+
+#### Software Architecture Improvements
+- 🔧 **PIN_CONFIGURATION.h** - Added 8 servo channel definitions
+- 🔧 **SERVO_DISPENSER.h/.cpp** - Implemented dual-servo pair control
+- 🔧 **ChitExchanger.ino** - Updated main loop with new test commands
+- 🔧 **Enhanced documentation** - SERVO_PAIR_CONFIGURATION.md added
+
+#### Documentation Updates
+- 📚 Comprehensive servo configuration guide
+- 📚 Updated hardware component specifications
+- 📚 Detailed pin mapping for all 8 servo channels
+- 📚 Testing procedures and troubleshooting guides
+- 📚 3D printing guidelines for new model files
+
+**Migration Notes:**
+- Existing single-servo code remains compatible via legacy definitions
+- `CHIT_X_CHANNEL` macros now map to first servo of each pair
+- No changes required to main dispensing logic
+- Backward compatible with existing hardware (can use 4 or 8 servos)
+
+---
 
 ## Overview
 
@@ -65,11 +130,19 @@ The **IoT Chits Exchanger** is an intelligent, dual-platform automated currency 
   - Support for various bill denominations
 
 ### Automated Dispensing (ESP32 Platform)
- - **Servo-Controlled Chit Dispenser**
-     - PCA9685 PWM driver for precise control of 360-degree servos
-     - Servo outputs are fully deactivated (PWM=0) after initialization and after dispensing, preventing unwanted movement
-     - Legacy angle-based functions are retained for compatibility with standard servos
-     - Repeat dispensing capability
+ - **Dual-Servo Chit Dispenser System**
+     - **8 Servos (4 Pairs)**: Each denomination uses a pair of servos working simultaneously
+     - **Channel Configuration**:
+       - ₱50 Chits: Channels 0 & 1 (Pair 1)
+       - ₱20 Chits: Channels 2 & 3 (Pair 2)
+       - ₱10 Chits: Channels 4 & 5 (Pair 3)
+       - ₱5 Chits: Channels 6 & 7 (Pair 4)
+     - PCA9685 PWM driver for precise control of 8 continuous rotation (360°) servos
+     - Synchronized dual-servo operation for increased torque and reliability
+     - Servo outputs are fully deactivated (PWM=0) after initialization and after dispensing
+     - Time-based dispensing with denomination-specific durations (500-800ms)
+     - Legacy angle-based functions retained for compatibility with standard servos
+     - Serial test commands for individual pair testing and diagnostics
 
 ### AI-Powered Chit Recognition (Raspberry Pi Platform)
 - **YOLOv11 Computer Vision System**
@@ -152,8 +225,8 @@ The **IoT Chits Exchanger** is an intelligent, dual-platform automated currency 
 | **Microcontroller** | ESP32 DevKit | 1 | System brain and control unit |
 | **Coin Slot** | Arcade Coin Acceptor | 1 | Physical coin detection |
 | **Bill Acceptor** | TB74 Compatible | 1 | Bill validation and acceptance |
-| **Servo Motor** | Standard 9g Servo | 1 | Chit dispensing mechanism |
-| **PWM Driver** | PCA9685 16-Channel | 1 | Servo motor control |
+| **Servo Motors** | 360° Continuous Rotation | 8 | Dual-servo chit dispensing (4 pairs) |
+| **PWM Driver** | PCA9685 16-Channel | 1 | 8 servo motor control with headroom |
 | **LCD Display** | 20x4 I2C LCD | 1 | User interface display |
 | **Tactile Buttons** | 12mm Push Buttons | 2 | User input controls |
 | **Piezo Buzzer** | 5V Active Buzzer | 1 | Audio feedback |
@@ -318,7 +391,7 @@ The Chit Dispenser Servo Mount is a custom 3D printable part designed to securel
     <img src="model/Chit_Dispenser_Servo_Roller.png" alt="Chit Dispenser Servo Roller" width="350"/>
 </div>
 
-The Chit Dispenser Servo Roller is a 3D printable roller component used in the chit dispensing system. The image (`model/Chit_Dispenser_Servo_Roller.png`) and model file (`model/Chit_Dispenser_Servo_Roller.stl`) provide reference for fabrication and installation.
+The Chit Dispenser Servo Roller is a 3D printable roller component used in the chit dispensing system. The image (`model/Chit_Dispenser_Servo_Roller.png`) and model file (`model/Chit_Dispenser_Servo_Roller.stl`) provide reference for fabrication and installation. G-code file available: `model/CE3V3SE_Chit_Dispenser_Servo_Roller.gcode`.
 
 #### Chit Dispenser Storage
 
@@ -336,27 +409,49 @@ The Chit Dispenser Storage is a 3D printable storage compartment for holding chi
 
 This image (`model/Chit_Dispenser_Full_View.png`) shows the complete assembled chit dispenser, which joins the storage, dispenser servo mount, and dispenser servo roller into a single integrated unit. Use this as a reference for the full hardware assembly and integration of the chit dispensing mechanism.
 
+#### Chit Camera Mount
+
+<div align="center">
+    <img src="model/Chit_Camera_Mount.png" alt="Chit Camera Mount" width="350"/>
+</div>
+
+The Chit Camera Mount is a 3D printable mounting bracket designed to securely position the camera for optimal chit scanning. The model file (`model/Chit_Camera_Mount.stl`) enables easy fabrication and integration into the Raspberry Pi-based chit recognition system.
+
+#### Chit Acceptor Wall Guide
+
+The Chit Acceptor Wall Guide (`model/Chit_Acceptor_Wall_Guide.stl`) is a 3D printable component that provides guidance for chit insertion, ensuring proper alignment during the acceptance process.
+
+#### ESP32-CAM Case
+
+The ESP32-CAM case (`model/CE3V3SE_ESP32-CAM_-_ESP32-CAM-MB_Case.gcode`) is a protective enclosure designed for the ESP32-CAM module and its programming board (ESP32-CAM-MB), ready for 3D printing on Creality Ender 3 V3 SE printers.
+
 ### Available 3D Model Files
 
+#### Fusion 360 Source Files (.f3d)
   - `model/TB74.f3d` - TB74 Bill Acceptor 3D model
   - `model/ALLAN_COINSLOT.f3d` - ALLAN Coin Slot 3D model
   - `model/QPPD4 v29.f3d` - Complete system design
-    - `model/Chit_Dispenser_Servo_Mount.f3d` - Chit Dispenser Servo Mount 3D model
-    - `model/Chit_Dispenser_Storage.f3d` - Chit Dispenser Storage 3D model
 
+#### STL Files (Universal 3D Printing)
   - `model/Chit_Acceptor_Front.stl` - Front panel STL
   - `model/Chit_Acceptor_Hand.stl` - Hand mechanism STL
   - `model/Chit_Acceptor_Servo_Mount.stl` - Servo mount STL
+  - `model/Chit_Acceptor_Wall_Guide.stl` - Wall guide for chit insertion
   - `model/Chit_Lcd_Mount.stl` - LCD mount STL
-    - `model/Chit_Dispenser_Servo_Mount.stl` - Dispenser servo mount STL
-    - `model/Chit_Dispenser_Servo_Roller.stl` - Dispenser servo roller STL
-    - `model/Chit_Dispenser_Storage.stl` - Chit storage STL
+  - `model/Chit_Dispenser_Servo_Mount.stl` - Dispenser servo mount STL
+  - `model/Chit_Dispenser_Servo_Roller.stl` - Dispenser servo roller STL
+  - `model/Chit_Dispenser_Storage.stl` - Chit storage STL
+  - `model/Chit_Camera_Mount.stl` - Camera mounting bracket
 
-  - `model/CE3V3SE_Chit_Acceptor_Front.gcode` - Front panel for Creality Ender 3 V3 SE
-  - `model/CE3V3SE_Chit_Acceptor_Hand.gcode` - Hand mechanism for Creality Ender 3 V3 SE
-  - `model/CE3V3SE_Chit_Lcd_Mount.gcode` - LCD mount for Creality Ender 3 V3 SE
-    - `model/CE3V3SE_Chit_Dispenser_Servo_Mount.gcode` - Dispenser servo mount for Creality Ender 3 V3 SE
+#### G-code Files (Creality Ender 3 V3 SE)
+  - `model/CE3V3SE_Chit_Acceptor_Front.gcode` - Front panel
+  - `model/CE3V3SE_Chit_Acceptor_Hand.gcode` - Hand mechanism
+  - `model/CE3V3SE_Chit_Lcd_Mount.gcode` - LCD mount
+  - `model/CE3V3SE_Chit_Dispenser_Servo_Mount.gcode` - Dispenser servo mount
+  - `model/CE3V3SE_Chit_Dispenser_Servo_Roller.gcode` - Dispenser servo roller
+  - `model/CE3V3SE_ESP32-CAM_-_ESP32-CAM-MB_Case.gcode` - ESP32-CAM case
 
+#### Reference Images (.png)
   - `model/TB74.png` - TB74 Bill Acceptor reference
   - `model/ALLAN_COINSLOT.png` - ALLAN Coin Slot reference
   - `model/Chit_Acceptor_Back_View.png` - Complete chit acceptor assembly
@@ -364,10 +459,10 @@ This image (`model/Chit_Dispenser_Full_View.png`) shows the complete assembled c
   - `model/Chit_Acceptor_Servo_Mount.png` - Servo mount reference
   - `model/Chit_Acceptor_Hand.png` - Hand mechanism reference
   - `model/Chit_Lcd_Mount.png` - LCD mount reference
-    - `model/Chit_Dispenser_Servo_Mount.png` - Dispenser servo mount reference
-    - `model/Chit_Dispenser_Servo_Roller.png` - Dispenser servo roller reference
-    - `model/Chit_Dispenser_Storage.png` - Chit storage reference
-    - `model/Chit_Dispenser_Full_View.png` - Chit dispenser full assembly reference
+  - `model/Chit_Dispenser_Servo_Mount.png` - Dispenser servo mount reference
+  - `model/Chit_Dispenser_Servo_Roller.png` - Dispenser servo roller reference
+  - `model/Chit_Dispenser_Storage.png` - Chit storage reference
+  - `model/Chit_Dispenser_Full_View.png` - Chit dispenser full assembly reference
 
 ## System Architecture
 
@@ -633,9 +728,37 @@ Communication Protocol:
 
 </div>
 
+### PCA9685 Servo Channel Mapping (ESP32 Platform)
+
+<div align="center">
+
+| Denomination | Servo Pair | Channel 1 | Channel 2 | Operation Mode | Duration |
+|--------------|------------|-----------|-----------|----------------|----------|
+| **₱50 Chits** | Pair 1 | 0 | 1 | Synchronized CW | 800ms |
+| **₱20 Chits** | Pair 2 | 2 | 3 | Synchronized CW | 700ms |
+| **₱10 Chits** | Pair 3 | 4 | 5 | Synchronized CW | 600ms |
+| **₱5 Chits**  | Pair 4 | 6 | 7 | Synchronized CW | 500ms |
+
+</div>
+
+**Servo Configuration Details:**
+- **Total Servos**: 8 continuous rotation (360°) servos
+- **Servo Pairs**: 4 pairs, with each pair working simultaneously
+- **PWM Driver**: PCA9685 16-channel (I2C address: 0x40)
+- **Control Method**: Time-based rotation with denomination-specific durations
+- **PWM Values**: Forward (CW) = 450, Backward (CCW) = 300, Stop = 375
+- **Deactivation**: Servos fully deactivated (PWM=0) when not in use
+- **Available Channels**: 8 additional channels (8-15) for future expansion
+
+**Testing Commands:**
+- `TEST` - Tests ₱10 servo pair (channels 4 & 5)
+- `TESTALL` - Tests all 4 servo pairs sequentially
+
 ### ⚠️ Important Pin Notes
-- **ESP32 I2C Bus**: Shared between LCD and PCA9685 (different addresses: 0x27, 0x40)
+- **ESP32 I2C Bus**: Shared between LCD (0x27) and PCA9685 (0x40) on GPIO 21/22
 - **ESP32 Interrupts**: GPIO 26 & 27 support external interrupts for coin/bill detection
+- **PCA9685 Power**: Requires external 5V power supply for servos (separate from logic)
+- **Servo Current**: Each servo draws ~500mA under load; 8 servos = 4A total requirement
 - **RPi PWM Pins**: GPIO 18 & 19 support hardware PWM for precise servo and LED control
 - **USB Serial**: Multiple USB-to-serial adapters required for ALLAN hopper control
 - **Power Distribution**: Separate power rails for different voltage requirements
@@ -651,37 +774,105 @@ source/esp32/ChitExchanger/
 ├── 📄 ChitExchanger.ino          # Main application file
 ├── 🪙 COIN_SLOT.h/.cpp           # Coin detection system
 ├── 💵 BILL_ACCEPTOR.h/.cpp       # Bill acceptance system
-├── 🤖 SERVO_DISPENSER.h/.cpp     # Servo control system
+├── 🤖 SERVO_DISPENSER.h/.cpp     # Dual-servo pair control system
 ├── 📺 I2C_LCD.h/.cpp             # LCD display management
 ├── 🎮 TACTILE_BUTTON.h/.cpp      # Button input handling
-├──  PIEZO_BUZZER.h/.cpp        # Audio feedback system
-├── ⚙️ PIN_CONFIGURATION.h        # Centralized pin definitions
+├── 🔊 PIEZO_BUZZER.h/.cpp        # Audio feedback system
+├── ⚙️ PIN_CONFIGURATION.h        # Centralized pin & channel definitions
 └── 🌐 WIFI_COMMUNICATION.h/.cpp  # WiFi bridge to Raspberry Pi
+```
 
-├── 🟦 SOLID_STATE_RELAY.h/.cpp   # Modular SSR control (NEW)
-├── 🟧 COIN_HOPPER.h/.cpp          # Refactored: now uses SOLID_STATE_RELAY for power control
+#### ESP32 CoinExchanger (Coin-to-Coin Platform)
+```
+source/esp32/CoinExchanger/
+├── � CoinExchanger.ino          # Coin-to-coin exchange application
+├── �🟦 SOLID_STATE_RELAY.h/.cpp   # Modular SSR control
+├── 🟧 COIN_HOPPER.h/.cpp          # Coin hopper with SSR integration
+└── ⚙️ PIN_CONFIGURATION.h        # Pin definitions for coin system
+```
 
-### Modular Hardware Abstraction (NEW)
-- **SOLID_STATE_RELAY**: Dedicated class for controlling solid state relays (SSR) powering coin hoppers. Encapsulates relay logic, safety, and status methods. Used by COIN_HOPPER for power management.
-- **COIN_HOPPER**: Refactored to use SOLID_STATE_RELAY for SSR control. Each hopper is now composed with its own SSR instance, improving modularity and maintainability.
+### 🤖 Servo Dispenser Architecture (Enhanced)
 
-### Hardware Testing Commands (NEW)
-- Serial monitor commands added for individual testing of coin hopper sensors and SSR relays:
-    - `TEST_HOPPER_X`: Test pulse counting for hopper X (X=1,2,3)
-    - `TEST_SSR_X`: Test SSR relay activation for hopper X
-    - `TEST_ALL`: Run full hardware test sequence
-    - Results and status are printed to serial monitor for diagnostics.
+The servo dispensing system has been significantly upgraded to use **dual-servo pairs** for improved reliability and torque:
 
-### Refactor Summary
-- All SSR logic removed from COIN_HOPPER and moved to SOLID_STATE_RELAY.
-- COIN_HOPPER now composes SOLID_STATE_RELAY for power control.
-- Pin definitions for SSRs and hoppers updated in PIN_CONFIGURATION.h.
-- Hardware test commands added to main application for diagnostics.
+#### Key Features:
+- **8 Servo Configuration**: 4 pairs of servos (2 per denomination)
+- **Synchronized Operation**: Both servos in a pair work simultaneously
+- **PCA9685 PWM Driver**: Controls all 8 servos via I2C
+- **Time-Based Dispensing**: Each denomination has optimized rotation duration
+- **Full Deactivation**: Servos completely powered down (PWM=0) when idle
+- **Flexible Testing**: Individual pair and full system test commands
+
+#### Servo Pair Functions:
+```cpp
+// New dual-servo dispensing function
+void dispenseCardPair(int channel1, int channel2, int chitValue);
+
+// Test functions
+void testAdditionalServos();  // Test single pair (₱10)
+void testAllServoPairs();     // Test all 4 pairs sequentially
+```
+
+#### Channel Organization:
+```cpp
+// PIN_CONFIGURATION.h definitions
+#define CHIT_50_CHANNEL_1 0    // ₱50 pair - servo 1
+#define CHIT_50_CHANNEL_2 1    // ₱50 pair - servo 2
+#define CHIT_20_CHANNEL_1 2    // ₱20 pair - servo 1
+#define CHIT_20_CHANNEL_2 3    // ₱20 pair - servo 2
+#define CHIT_10_CHANNEL_1 4    // ₱10 pair - servo 1
+#define CHIT_10_CHANNEL_2 5    // ₱10 pair - servo 2
+#define CHIT_5_CHANNEL_1 6     // ₱5 pair - servo 1
+#define CHIT_5_CHANNEL_2 7     // ₱5 pair - servo 2
+```
+
+### Hardware Testing Commands
+
+**ESP32 ChitExchanger Serial Commands:**
+- `TEST` - Test ₱10 servo pair (channels 4 & 5) for 0.8 seconds
+- `TESTALL` - Test all 4 servo pairs with their respective durations
+
+**ESP32 CoinExchanger Serial Commands:**
+- `TEST_HOPPER_X` - Test pulse counting for hopper X (X=1,2,3)
+- `TEST_SSR_X` - Test SSR relay activation for hopper X
+- `TEST_ALL` - Run full hardware test sequence
+
+### 3D Model Files
+```
 model/
-├── TB74.f3d                     # TB74 bill acceptor 3D model (Fusion 360)
-├── TB74.png                     # TB74 bill acceptor reference image
-├── ALLAN_COINSLOT.f3d           # ALLAN coin slot 3D model (Fusion 360)
-├── ALLAN_COINSLOT.png           # ALLAN coin slot reference image
+├── 📐 Fusion 360 Files (.f3d)
+│   ├── TB74.f3d                     # TB74 bill acceptor
+│   ├── ALLAN_COINSLOT.f3d           # ALLAN coin slot
+│   └── QPPD4 v29.f3d                # Complete system design
+├── 🖨️ STL Files (Universal)
+│   ├── Chit_Acceptor_Front.stl
+│   ├── Chit_Acceptor_Hand.stl
+│   ├── Chit_Acceptor_Servo_Mount.stl
+│   ├── Chit_Acceptor_Wall_Guide.stl
+│   ├── Chit_Lcd_Mount.stl
+│   ├── Chit_Dispenser_Servo_Mount.stl
+│   ├── Chit_Dispenser_Servo_Roller.stl
+│   ├── Chit_Dispenser_Storage.stl
+│   └── Chit_Camera_Mount.stl
+├── ⚙️ G-code Files (Ender 3 V3 SE)
+│   ├── CE3V3SE_Chit_Acceptor_Front.gcode
+│   ├── CE3V3SE_Chit_Acceptor_Hand.gcode
+│   ├── CE3V3SE_Chit_Lcd_Mount.gcode
+│   ├── CE3V3SE_Chit_Dispenser_Servo_Mount.gcode
+│   ├── CE3V3SE_Chit_Dispenser_Servo_Roller.gcode
+│   └── CE3V3SE_ESP32-CAM_-_ESP32-CAM-MB_Case.gcode
+└── 🖼️ Reference Images (.png)
+    ├── TB74.png
+    ├── ALLAN_COINSLOT.png
+    ├── Chit_Acceptor_Back_View.png
+    ├── Chit_Acceptor_Front.png
+    ├── Chit_Acceptor_Servo_Mount.png
+    ├── Chit_Acceptor_Hand.png
+    ├── Chit_Lcd_Mount.png
+    ├── Chit_Dispenser_Servo_Mount.png
+    ├── Chit_Dispenser_Servo_Roller.png
+    ├── Chit_Dispenser_Storage.png
+    └── Chit_Dispenser_Full_View.png
 ```
 
 #### Raspberry Pi Platform (Chits to Coins)
@@ -1007,6 +1198,76 @@ cd source/esp32/ChitExchanger
    ```
 4. Go to **Tools** > **Board** > **Boards Manager**
 5. Search and install "esp32" by Espressif Systems
+
+##### 2.5. Servo Hardware Installation (8-Servo System)
+
+**Required Hardware:**
+- 8x Continuous Rotation (360°) Servos
+- PCA9685 16-Channel PWM Driver
+- External 5V/4A+ Power Supply (for servos)
+- Jumper wires and breadboard
+
+**Wiring Instructions:**
+
+1. **PCA9685 to ESP32 (I2C Connection)**
+   ```
+   PCA9685 VCC  → ESP32 3.3V (logic power)
+   PCA9685 GND  → ESP32 GND
+   PCA9685 SDA  → ESP32 GPIO 21
+   PCA9685 SCL  → ESP32 GPIO 22
+   ```
+
+2. **Servo Power (CRITICAL)**
+   ```
+   External 5V PSU (+) → PCA9685 V+ terminal
+   External 5V PSU (-) → PCA9685 GND terminal
+   
+   ⚠️ WARNING: Do NOT power servos from ESP32!
+   8 servos can draw 4A+ under load - use external PSU
+   ```
+
+3. **Servo Channel Connections**
+   ```
+   ₱50 Chits Pair:
+     - Servo 1 → PCA9685 Channel 0
+     - Servo 2 → PCA9685 Channel 1
+   
+   ₱20 Chits Pair:
+     - Servo 1 → PCA9685 Channel 2
+     - Servo 2 → PCA9685 Channel 3
+   
+   ₱10 Chits Pair:
+     - Servo 1 → PCA9685 Channel 4
+     - Servo 2 → PCA9685 Channel 5
+   
+   ₱5 Chits Pair:
+     - Servo 1 → PCA9685 Channel 6
+     - Servo 2 → PCA9685 Channel 7
+   ```
+
+4. **Common Ground**
+   ```
+   Connect ALL grounds together:
+   - ESP32 GND
+   - PCA9685 GND
+   - External PSU GND
+   
+   This ensures proper signal reference for all components.
+   ```
+
+**Servo Specifications:**
+- Type: Continuous rotation (360°)
+- Operating Voltage: 4.8-6V
+- Current Draw: 400-600mA per servo (under load)
+- Signal: Standard PWM (50Hz, 1-2ms pulse width)
+- Recommended: Metal gear servos for durability
+
+**Testing After Installation:**
+1. Upload the ChitExchanger code
+2. Open Serial Monitor (9600 baud)
+3. Type `TEST` - should test ₱10 pair (channels 4 & 5)
+4. Type `TESTALL` - should test all 4 pairs sequentially
+5. Verify both servos in each pair rotate simultaneously
 
 ##### 3. Library Installation
 1. Open **Tools** > **Manage Libraries**
@@ -2445,6 +2706,16 @@ class SystemMonitor:
 | **Bill Not Detected** | Bills not recognized | Verify TB74 connections, check signal levels |
 | **Hopper Jam** | Coins not dispensing | Clear mechanical obstruction, check motor voltage |
 
+#### Servo Dispenser Issues
+| Problem | Symptoms | Solution |
+|---------|----------|----------|
+| **Servos Not Moving** | No response when dispensing | Check PCA9685 power (5V external), verify I2C connection (address 0x40) |
+| **Only One Servo Works** | One servo in pair not rotating | Verify individual servo connections, check servo channel wiring |
+| **Weak Dispensing** | Chits not fully dispensed | Increase dispense duration, check servo power supply (4A total for 8 servos) |
+| **Erratic Movement** | Servos jitter or move randomly | Check PWM values, ensure proper deactivation (PWM=0), verify power stability |
+| **Servo Pair Unsynchronized** | Servos in pair don't start together | Check code timing, verify both channels receive commands simultaneously |
+| **TEST Command No Response** | Serial test commands don't work | Verify serial monitor baud rate (9600), check command format (uppercase) |
+
 ### 🔍 Debugging Steps
 
 #### Serial Monitor Debugging
@@ -2515,7 +2786,27 @@ We welcome contributions from the community! Here's how you can help improve the
    - Include test results
    - Reference any related issues
 
-### 📝 Contribution Guidelines
+### � Additional Documentation
+
+For detailed technical information, refer to these comprehensive guides:
+
+#### Servo System Documentation
+- **SERVO_PAIR_CONFIGURATION.md** - Complete guide to the 8-servo dual-pair system
+  - Detailed channel mappings and wiring diagrams
+  - Servo pair operation principles
+  - Testing procedures and troubleshooting
+  - Hardware specifications and power requirements
+  - Future expansion possibilities (8 unused channels)
+
+#### Legacy Documentation
+- **SERVO_CHANGES_SUMMARY.md** - Historical record of servo system evolution
+  - Migration from single servo to dual-servo pairs
+  - Backward compatibility information
+  - Change log and rationale
+
+These documents provide in-depth technical details beyond the scope of this README.
+
+### �📝 Contribution Guidelines
 
 #### Code Standards
 - **Indentation**: 2 spaces (no tabs)
