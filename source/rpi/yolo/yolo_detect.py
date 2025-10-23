@@ -3,6 +3,9 @@ import sys
 import argparse
 import glob
 import time
+import serial
+import RPi.GPIO as GPIO
+import pigpio
 
 import cv2
 import numpy as np
@@ -19,11 +22,26 @@ parser.add_argument('--resolution', help='Resolution in WxH to display inference
                     default=None)
 parser.add_argument('--record', help='Record results from video or webcam and save it as "demo1.avi". Must specify --resolution argument to record.',
                     action='store_true')
+parser.add_argument('--esp32_port', help='Serial port for ESP32 communication (example: "/dev/ttyUSB0")',
+                    default='/dev/ttyUSB0')
+parser.add_argument('--camera_ip', help='ESP32-CAM IP address',
+                    default='192.168.1.21')
 
 args = parser.parse_args()
 
 # ESP32-CAM HTTP stream URL
-img_source = 'http://192.168.1.21/stream'  # Default IP when in AP mode, change if needed
+img_source = f'http://{args.camera_ip}/stream'
+
+# GPIO Pin Configurations for RPi
+IR_SENSOR_PIN = 17  # IR sensor input
+SERVO_PIN = 22      # Servo control pin
+
+# Servo angles
+SERVO_INITIAL_ANGLE = 39
+SERVO_RELEASE_ANGLE = 90
+
+# Valid chit denominations
+VALID_CHITS = [5, 10, 20, 50]
 
 # Parse user inputs
 model_path = args.model
@@ -50,6 +68,27 @@ if user_res:
     resize = True
     resW, resH = int(user_res.split('x')[0]), int(user_res.split('x')[1])
 
+# Initialize GPIO for IR sensor and Servo
+GPIO.setmode(GPIO.BCM)
+GPIO.setwarnings(False)
+GPIO.setup(IR_SENSOR_PIN, GPIO.IN)
+
+# Initialize pigpio for servo control
+pi = pigpio.pi()
+if not pi.connected:
+    print("ERROR: Could not connect to pigpio daemon. Run 'sudo pigpiod' first.")
+    sys.exit(1)
+
+# Initialize serial communication with ESP32
+try:
+    esp32_serial = serial.Serial(args.esp32_port, 115200, timeout=1)
+    time.sleep(2)  # Wait for serial connection to establish
+    print(f"Serial connection to ESP32 established on {args.esp32_port}")
+except Exception as e:
+    print(f"WARNING: Could not connect to ESP32 on {args.esp32_port}: {e}")
+    print("Continuing without ESP32 serial communication...")
+    esp32_serial = None
+
 # Check if recording is valid and set up recording
 if record:
     if source_type not in ['video','usb']:
@@ -63,6 +102,56 @@ if record:
     record_name = 'demo1.avi'
     record_fps = 30
     recorder = cv2.VideoWriter(record_name, cv2.VideoWriter_fourcc(*'MJPG'), record_fps, (resW,resH))
+
+# Helper functions for servo control
+def angle_to_pulse(angle):
+    """Convert angle (0-180) to pulse width (500-2500us)"""
+    return int(500 + (angle / 180.0) * 2000)
+
+def set_servo_angle(angle):
+    """Set servo to specified angle"""
+    if angle < 0:
+        angle = 0
+    elif angle > 180:
+        angle = 180
+    pulse_width = angle_to_pulse(angle)
+    pi.set_servo_pulsewidth(SERVO_PIN, pulse_width)
+
+def release_chit():
+    """Release chit by moving servo to release position and back"""
+    print(f"Releasing chit: Moving servo from {SERVO_INITIAL_ANGLE}° to {SERVO_RELEASE_ANGLE}°")
+    set_servo_angle(SERVO_RELEASE_ANGLE)
+    time.sleep(2)  # Hold for 2 seconds
+    print(f"Returning servo to initial position {SERVO_INITIAL_ANGLE}°")
+    set_servo_angle(SERVO_INITIAL_ANGLE)
+
+def send_to_esp32(message):
+    """Send message to ESP32 via serial"""
+    if esp32_serial and esp32_serial.is_open:
+        try:
+            esp32_serial.write((message + '\n').encode())
+            esp32_serial.flush()
+            print(f"Sent to ESP32: {message}")
+        except Exception as e:
+            print(f"Error sending to ESP32: {e}")
+
+def read_from_esp32():
+    """Read messages from ESP32 if available"""
+    if esp32_serial and esp32_serial.is_open:
+        try:
+            if esp32_serial.in_waiting > 0:
+                return esp32_serial.readline().decode().strip()
+        except Exception as e:
+            print(f"Error reading from ESP32: {e}")
+    return None
+
+def is_ir_detected():
+    """Check if IR sensor detects a chit"""
+    return not GPIO.input(IR_SENSOR_PIN)  # Active LOW
+
+# Initialize servo to home position
+set_servo_angle(SERVO_INITIAL_ANGLE)
+print(f"Servo initialized to {SERVO_INITIAL_ANGLE}°")
 
 # Initialize RTSP stream connection
 cap = cv2.VideoCapture(img_source)
@@ -89,11 +178,66 @@ frame_rate_buffer = []
 fps_avg_len = 200
 img_count = 0
 
+# Detection state variables
+detection_active = False
+last_ir_state = False
+detected_chit_value = None
+detection_confidence = 0.0
+detection_start_time = 0
+DETECTION_TIMEOUT = 10  # seconds
+
 # Begin YOLO detection using ESP32-CAM RTSP stream
 print("Connected to ESP32-CAM. Running detection...")
+print(f"IR Sensor on GPIO {IR_SENSOR_PIN}")
+print(f"Servo on GPIO {SERVO_PIN}")
+print("Waiting for IR sensor to detect chit...")
 
 # Begin inference loop
 while True:
+    
+    # Check for messages from ESP32
+    esp32_msg = read_from_esp32()
+    if esp32_msg:
+        print(f"ESP32: {esp32_msg}")
+    
+    # Check IR sensor state
+    ir_detected = is_ir_detected()
+    
+    # Start detection when IR sensor is triggered
+    if ir_detected and not last_ir_state:
+        print("\n=== IR SENSOR DETECTED CHIT ===")
+        detection_active = True
+        detected_chit_value = None
+        detection_confidence = 0.0
+        detection_start_time = time.time()
+        send_to_esp32("IR_DETECTED")
+    
+    # Stop detection if IR sensor no longer detects or timeout
+    if detection_active and (not ir_detected or (time.time() - detection_start_time > DETECTION_TIMEOUT)):
+        if detected_chit_value:
+            print(f"\n=== DETECTION COMPLETE ===")
+            print(f"Detected: ₱{detected_chit_value} chit (confidence: {detection_confidence:.2%})")
+            
+            # Send detection result to ESP32
+            send_to_esp32(f"CHIT_DETECTED:{detected_chit_value}")
+            
+            # Release the chit
+            release_chit()
+            
+            # Notify ESP32 that chit was released
+            send_to_esp32(f"CHIT_RELEASED:{detected_chit_value}")
+            
+            print(f"Chit ₱{detected_chit_value} released successfully")
+        elif time.time() - detection_start_time > DETECTION_TIMEOUT:
+            print("Detection timeout - no valid chit detected")
+            send_to_esp32("DETECTION_TIMEOUT")
+        
+        detection_active = False
+        detected_chit_value = None
+        detection_confidence = 0.0
+        print("Waiting for next chit...\n")
+    
+    last_ir_state = ir_detected
 
     t_start = time.perf_counter()
 
@@ -151,14 +295,42 @@ while True:
 
             # Basic example: count the number of objects in the image
             object_count = object_count + 1
+            
+            # If detection is active, check for valid chit denominations
+            if detection_active:
+                try:
+                    # Try to extract denomination from class name (e.g., "5", "10", "20", "50")
+                    chit_value = int(classname)
+                    if chit_value in VALID_CHITS:
+                        # Update detected chit if confidence is higher
+                        if conf > detection_confidence:
+                            detected_chit_value = chit_value
+                            detection_confidence = conf
+                            print(f"Detected: ₱{chit_value} chit with {conf:.2%} confidence")
+                except ValueError:
+                    # Class name is not a number, skip
+                    pass
 
     # Calculate and draw framerate (if using video, USB, or Picamera source)
     if source_type == 'video' or source_type == 'usb' or source_type == 'picamera':
         cv2.putText(frame, f'FPS: {avg_frame_rate:0.2f}', (10,20), cv2.FONT_HERSHEY_SIMPLEX, .7, (0,255,255), 2) # Draw framerate
     
-    # Display detection results
-    cv2.putText(frame, f'Number of objects: {object_count}', (10,40), cv2.FONT_HERSHEY_SIMPLEX, .7, (0,255,255), 2) # Draw total number of detected objects
-    cv2.imshow('YOLO detection results',frame) # Display image
+    # Display detection results and status
+    cv2.putText(frame, f'Objects: {object_count}', (10,40), cv2.FONT_HERSHEY_SIMPLEX, .7, (0,255,255), 2)
+    
+    # Display IR sensor status
+    ir_status = "DETECTED" if ir_detected else "NO CHIT"
+    ir_color = (0,255,0) if ir_detected else (0,0,255)
+    cv2.putText(frame, f'IR: {ir_status}', (10,60), cv2.FONT_HERSHEY_SIMPLEX, .7, ir_color, 2)
+    
+    # Display detection status
+    if detection_active:
+        status_text = f'DETECTING... ({int(time.time() - detection_start_time)}s)'
+        if detected_chit_value:
+            status_text = f'DETECTED: P{detected_chit_value} ({detection_confidence:.0%})'
+        cv2.putText(frame, status_text, (10,80), cv2.FONT_HERSHEY_SIMPLEX, .7, (0,255,0), 2)
+    
+    cv2.imshow('Chit Detection System', frame) # Display image
     if record: recorder.write(frame)
 
     # Wait for key press (5ms timeout)
@@ -187,7 +359,22 @@ while True:
 
 
 # Clean up
+print(f'\nShutting down...')
 print(f'Average pipeline FPS: {avg_frame_rate:.2f}')
+
+# Clean up GPIO and servo
+set_servo_angle(SERVO_INITIAL_ANGLE)
+pi.set_servo_pulsewidth(SERVO_PIN, 0)  # Stop servo
+pi.stop()
+GPIO.cleanup()
+
+# Close serial connection
+if esp32_serial and esp32_serial.is_open:
+    send_to_esp32("SYSTEM_SHUTDOWN")
+    esp32_serial.close()
+
 cap.release()
 if record: recorder.release()
 cv2.destroyAllWindows()
+
+print("System shutdown complete.")

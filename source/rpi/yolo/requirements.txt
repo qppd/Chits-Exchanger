@@ -1,3 +1,21 @@
+# Core dependencies for Chit Detection System
+# Updated for ESP32 integration - October 2025
+
+# YOLO and Computer Vision
+ultralytics>=8.0.0
+opencv-python>=4.5.0
+numpy>=1.21.0
+
+# Serial Communication with ESP32
+pyserial>=3.5
+
+# Raspberry Pi GPIO Control
+RPi.GPIO>=0.7.1
+
+# Servo Control via pigpio
+pigpio>=1.78
+
+# Original dependencies
 asgiref==3.6.0
 astroid==2.14.2
 asttokens==2.2.1

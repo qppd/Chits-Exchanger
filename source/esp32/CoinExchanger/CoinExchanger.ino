@@ -2,15 +2,26 @@
  * CoinExchanger.ino
  * ESP32 Coin Exchanger with ALLAN Coin Hopper
  * 
- * This program reads pulses from an ALLAN coin hopper using interrupts
- * and provides coin dispensing functionality.
+ * Integrated system with RPi for chit detection and coin dispensing
+ * 
+ * Workflow:
+ * 1. RPi detects chit using IR sensor and YOLO (5, 10, 20, 50 peso)
+ * 2. RPi sends CHIT_DETECTED command to ESP32
+ * 3. ESP32 displays denomination selection UI on LCD
+ * 4. User selects desired denominations via button
+ * 5. ESP32 calculates optimal coin combination
+ * 6. ESP32 dispenses coins using 3 hoppers (5, 10, 20 peso)
+ * 7. ESP32 counts coins via pulse detection
+ * 8. ESP32 displays progress on LCD
  * 
  * Hardware Connections:
- * - ALLAN Coin Hopper:
- *   Pin 1: 3.3V (Power)
- *   Pin 2: GPIO19 (Pulse Signal)
- *   Pin 3: GND (Ground)
- *   Pin 4: Unused
+ * - ALLAN Coin Hoppers:
+ *   Hopper 1 (5 PHP): GPIO19 (pulse), GPIO26 (SSR)
+ *   Hopper 2 (10 PHP): GPIO18 (pulse), GPIO25 (SSR)
+ *   Hopper 3 (20 PHP): GPIO4 (pulse), GPIO33 (SSR)
+ * - I2C LCD: SDA=GPIO21, SCL=GPIO22
+ * - Button: GPIO (to be configured)
+ * - Serial: Connected to RPi for communication
  * 
  * Author: ESP32 CoinExchanger System
  * Date: October 2025
@@ -19,65 +30,152 @@
 #include "PIN_CONFIGURATION.h"
 #include "SOLID_STATE_RELAY.h"
 #include "COIN_HOPPER.h"
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+
+// LCD Configuration
+#define LCD_ADDR 0x27
+#define LCD_COLS 20
+#define LCD_ROWS 4
+LiquidCrystal_I2C lcd(LCD_ADDR, LCD_COLS, LCD_ROWS);
+
+// Button Pin
+#define BUTTON_PIN 27  // BCM pin for button input
 
 // Global variables - 3 Coin Hoppers
-COIN_HOPPER coinHopper1(0);  // Hopper 1 - GPIO19
-COIN_HOPPER coinHopper2(1);  // Hopper 2 - GPIO18
-COIN_HOPPER coinHopper3(2);  // Hopper 3 - GPIO4
+COIN_HOPPER coinHopper1(0);  // Hopper 1 - GPIO19 - 5 PHP
+COIN_HOPPER coinHopper2(1);  // Hopper 2 - GPIO18 - 10 PHP
+COIN_HOPPER coinHopper3(2);  // Hopper 3 - GPIO4 - 20 PHP
 
-// System variables (simplified)
+// System variables
 unsigned long lastCoinCount[NUM_COIN_HOPPERS] = {0, 0, 0};
 
-// Essential RPi communication commands
-const String CMD_DISPENSE_COINS = "DISPENSE_COINS";
-const String CMD_GET_COUNT = "GET_COUNT";
-const String CMD_GET_STATUS = "GET_STATUS";
-const String CMD_RESET_COUNT = "RESET_COUNT";
+// System states
+enum SystemState {
+  STATE_IDLE,
+  STATE_CHIT_DETECTED,
+  STATE_DENOMINATION_SELECTION,
+  STATE_CALCULATING,
+  STATE_DISPENSING,
+  STATE_COMPLETE,
+  STATE_ERROR
+};
+
+SystemState currentState = STATE_IDLE;
+
+// Chit detection variables
+int detectedChitValue = 0;  // Value of detected chit (5, 10, 20, 50)
+
+// Denomination selection variables
+int selectedDenomination = 5;  // Current selection (5, 10, or 20)
+const int availableDenominations[] = {5, 10, 20};
+const int numDenominations = 3;
+int denominationIndex = 0;
+
+// Dispensing variables
+struct DispenseP lan {
+  int coins_5;
+  int coins_10;
+  int coins_20;
+  int totalCoins;
+  int totalValue;
+  int remainder;
+};
+
+DispensePlan currentPlan = {0, 0, 0, 0, 0, 0};
+int dispensedCoins = 0;
+
+// RPi communication commands
+const String CMD_IR_DETECTED = "IR_DETECTED";
+const String CMD_CHIT_DETECTED = "CHIT_DETECTED";
+const String CMD_CHIT_RELEASED = "CHIT_RELEASED";
+const String CMD_DETECTION_TIMEOUT = "DETECTION_TIMEOUT";
+const String CMD_SYSTEM_SHUTDOWN = "SYSTEM_SHUTDOWN";
 
 // Testing commands for Serial monitor
-const String CMD_TEST_PULSE = "test_pulse";       // test_pulse 1/2/3 - Test pulse detection from coin hopper
-const String CMD_TEST_RELAY = "test_relay";       // test_relay 1/2/3 on/off - Test SSR relay control
-const String CMD_TEST_ALL = "test_all";           // Test all hoppers and relays
-const String CMD_HELP = "help";                   // Show help menu
+const String CMD_TEST_PULSE = "test_pulse";
+const String CMD_TEST_RELAY = "test_relay";
+const String CMD_TEST_ALL = "test_all";
+const String CMD_HELP = "help";
+const String CMD_TEST_CHIT = "test_chit";  // Simulate chit detection
+
+// Button handling
+volatile bool buttonPressed = false;
+volatile unsigned long lastButtonTime = 0;
+const unsigned long DEBOUNCE_DELAY = 200;  // 200ms debounce
+
+// Button ISR
+void IRAM_ATTR buttonISR() {
+  unsigned long currentTime = millis();
+  if (currentTime - lastButtonTime > DEBOUNCE_DELAY) {
+    buttonPressed = true;
+    lastButtonTime = currentTime;
+  }
+}
 
 void setup() {
   // Initialize serial communication
   Serial.begin(115200);
   while (!Serial) {
-    delay(10); // Wait for serial to initialize
+    delay(10);
   }
   
-  Serial.println("=== ESP32 Coin Exchanger System ===");
-  Serial.println("Initializing 3 ALLAN Coin Hoppers...");
+  Serial.println("\n=== ESP32 Coin Exchanger System ===");
+  Serial.println("Integrated with RPi Chit Detection");
+  
+  // Initialize I2C for LCD
+  Wire.begin(21, 22);  // SDA, SCL
+  
+  // Initialize LCD
+  lcd.init();
+  lcd.backlight();
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Coin Exchanger");
+  lcd.setCursor(0, 1);
+  lcd.print("Initializing...");
+  
+  // Initialize button with interrupt
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(BUTTON_PIN), buttonISR, FALLING);
   
   // Initialize all 3 coin hoppers with SSR control
+  Serial.println("Initializing 3 ALLAN Coin Hoppers...");
   bool allInitialized = true;
   allInitialized &= coinHopper1.begin(COIN_HOPPER_1_PULSE_PIN, 0, COIN_HOPPER_1_SSR_PIN);
   allInitialized &= coinHopper2.begin(COIN_HOPPER_2_PULSE_PIN, 1, COIN_HOPPER_2_SSR_PIN);
   allInitialized &= coinHopper3.begin(COIN_HOPPER_3_PULSE_PIN, 2, COIN_HOPPER_3_SSR_PIN);
   
   if (allInitialized) {
-    Serial.println("✅ All 3 coin hoppers initialized successfully!");
+    Serial.println("✅ All 3 coin hoppers initialized!");
+    lcd.setCursor(0, 2);
+    lcd.print("Hoppers: OK");
   } else {
-    Serial.println("❌ Error initializing one or more coin hoppers!");
+    Serial.println("❌ Error initializing hoppers!");
+    lcd.setCursor(0, 2);
+    lcd.print("Hoppers: ERROR");
   }
   
-  Serial.println("System ready!");
-  Serial.println("=== SIMPLIFIED COIN EXCHANGER ===");
-  Serial.println("💡 Type 'help' for testing commands");
-  Serial.println();
-  Serial.println("🧪 Quick Tests:");
-  Serial.println("  test_pulse 1/2/3  - Test pulse detection");
-  Serial.println("  test_relay 1/2/3 on/off - Test SSR relays");
-  Serial.println("  test_all          - Test everything");
-  Serial.println();
-  Serial.println("📡 RPi Commands:");
-  Serial.println("  DISPENSE_COINS, GET_COUNT, GET_STATUS, RESET_COUNT");
-  Serial.println();
-  Serial.println("Coin values: 5PHP(H1), 10PHP(H2), 20PHP(H3)");
-  Serial.println("==================================");
-  // These will be used when simpleTimingMode is enabled
-  // Using the same pins but different interrupt handlers for direct timing control
+  delay(2000);
+  
+  // Display ready message
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Ready!");
+  lcd.setCursor(0, 1);
+  lcd.print("Waiting for chit...");
+  
+  Serial.println("\n=== SYSTEM READY ===");
+  Serial.println("Hopper values:");
+  Serial.println("  Hopper 1: 5 PHP (GPIO19)");
+  Serial.println("  Hopper 2: 10 PHP (GPIO18)");
+  Serial.println("  Hopper 3: 20 PHP (GPIO4)");
+  Serial.println("\nCommands from RPi:");
+  Serial.println("  CHIT_DETECTED:<value>");
+  Serial.println("\nTest commands:");
+  Serial.println("  test_chit 50  - Simulate 50 peso chit");
+  Serial.println("  help          - Show all commands");
+  Serial.println("====================\n");
 }
 
 
@@ -86,45 +184,356 @@ void loop() {
   // Handle serial commands from RPi
   handleSerialCommands();
   
-  // Check all 3 coin hoppers for new coins
-  COIN_HOPPER* hoppers[] = {&coinHopper1, &coinHopper2, &coinHopper3};
-  
-  for (int i = 0; i < NUM_COIN_HOPPERS; i++) {
-    unsigned long currentCoinCount = hoppers[i]->getTotalCoins();
-    
-    // Check if there's a new coin detected on this hopper
-    if (currentCoinCount != lastCoinCount[i]) {
-      // Send coin event to RPi
-      sendCoinEvent(i + 1, currentCoinCount);
-      lastCoinCount[i] = currentCoinCount;
-    }
-  }
-  
   // Update all coin hoppers
   coinHopper1.update();
   coinHopper2.update();
   coinHopper3.update();
   
-  // Minimal delay for real-time responsiveness
-  delay(5);
+  // Handle state machine
+  switch (currentState) {
+    case STATE_IDLE:
+      // Waiting for chit detection from RPi
+      break;
+      
+    case STATE_CHIT_DETECTED:
+      // Chit detected, show value and prompt for denomination selection
+      handleChitDetected();
+      break;
+      
+    case STATE_DENOMINATION_SELECTION:
+      // User selecting denomination
+      handleDenominationSelection();
+      break;
+      
+    case STATE_CALCULATING:
+      // Calculate optimal coin combination
+      handleCalculation();
+      break;
+      
+    case STATE_DISPENSING:
+      // Dispense coins
+      handleDispensing();
+      break;
+      
+    case STATE_COMPLETE:
+      // Dispensing complete
+      handleComplete();
+      break;
+      
+    case STATE_ERROR:
+      // Error state
+      handleError();
+      break;
+  }
+  
+  // Minimal delay
+  delay(10);
 }
 
 
+
+// ========== STATE HANDLERS ==========
+
+void handleChitDetected() {
+  // Display chit value and start denomination selection
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Chit Detected!");
+  lcd.setCursor(0, 1);
+  lcd.print("Value: P");
+  lcd.print(detectedChitValue);
+  
+  Serial.print("Chit detected: P");
+  Serial.println(detectedChitValue);
+  
+  delay(2000);
+  
+  // Move to denomination selection
+  currentState = STATE_DENOMINATION_SELECTION;
+  denominationIndex = 0;
+  selectedDenomination = availableDenominations[0];
+}
+
+void handleDenominationSelection() {
+  // Display denomination selection UI
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Select Denom:");
+  lcd.setCursor(0, 1);
+  lcd.print("> P");
+  lcd.print(selectedDenomination);
+  lcd.print(" coins");
+  
+  lcd.setCursor(0, 2);
+  lcd.print("Amount: P");
+  lcd.print(detectedChitValue);
+  
+  lcd.setCursor(0, 3);
+  lcd.print("Press to confirm");
+  
+  // Handle button press to cycle through denominations or confirm
+  if (buttonPressed) {
+    buttonPressed = false;
+    
+    // Cycle to next denomination
+    denominationIndex++;
+    if (denominationIndex >= numDenominations) {
+      // User confirmed selection, move to calculation
+      Serial.print("User selected denomination: P");
+      Serial.println(selectedDenomination);
+      currentState = STATE_CALCULATING;
+    } else {
+      selectedDenomination = availableDenominations[denominationIndex];
+      Serial.print("Denomination changed to: P");
+      Serial.println(selectedDenomination);
+    }
+  }
+}
+
+void handleCalculation() {
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Calculating...");
+  
+  Serial.println("Calculating coin combination...");
+  
+  // Calculate optimal coin combination based on ChitExchanger algorithm
+  currentPlan = calculateCoinCombination(detectedChitValue, selectedDenomination);
+  
+  // Display plan
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Plan:");
+  lcd.setCursor(0, 1);
+  lcd.print("5P:");
+  lcd.print(currentPlan.coins_5);
+  lcd.print(" 10P:");
+  lcd.print(currentPlan.coins_10);
+  lcd.print(" 20P:");
+  lcd.print(currentPlan.coins_20);
+  
+  lcd.setCursor(0, 2);
+  lcd.print("Total: P");
+  lcd.print(currentPlan.totalValue);
+  
+  if (currentPlan.remainder > 0) {
+    lcd.setCursor(0, 3);
+    lcd.print("Remainder: P");
+    lcd.print(currentPlan.remainder);
+  }
+  
+  Serial.println("=== Dispensing Plan ===");
+  Serial.print("5 PHP coins: ");
+  Serial.println(currentPlan.coins_5);
+  Serial.print("10 PHP coins: ");
+  Serial.println(currentPlan.coins_10);
+  Serial.print("20 PHP coins: ");
+  Serial.println(currentPlan.coins_20);
+  Serial.print("Total value: P");
+  Serial.println(currentPlan.totalValue);
+  Serial.print("Remainder: P");
+  Serial.println(currentPlan.remainder);
+  
+  delay(3000);
+  
+  // Move to dispensing
+  currentState = STATE_DISPENSING;
+  dispensedCoins = 0;
+}
+
+void handleDispensing() {
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Dispensing...");
+  
+  Serial.println("\n=== Starting Dispensing ===");
+  
+  COIN_HOPPER* hoppers[] = {&coinHopper1, &coinHopper2, &coinHopper3};
+  int coinsToDispense[] = {currentPlan.coins_20, currentPlan.coins_10, currentPlan.coins_5};
+  String denomNames[] = {"20 PHP", "10 PHP", "5 PHP"};
+  int hopperOrder[] = {2, 1, 0};  // Dispense 20, then 10, then 5
+  
+  // Dispense from each hopper
+  for (int i = 0; i < 3; i++) {
+    int hopperIdx = hopperOrder[i];
+    int coinsNeeded = coinsToDispense[i];
+    
+    if (coinsNeeded > 0) {
+      lcd.setCursor(0, 1);
+      lcd.print("Dispensing ");
+      lcd.print(denomNames[i]);
+      lcd.setCursor(0, 2);
+      lcd.print("Count: 0/");
+      lcd.print(coinsNeeded);
+      
+      Serial.print("Dispensing ");
+      Serial.print(coinsNeeded);
+      Serial.print(" x ");
+      Serial.print(denomNames[i]);
+      Serial.println(" coins...");
+      
+      // Reset counter for this hopper
+      unsigned long startCount = hoppers[hopperIdx]->getTotalCoins();
+      
+      // Start dispensing
+      hoppers[hopperIdx]->dispenseCoins(coinsNeeded);
+      
+      // Monitor dispensing progress
+      unsigned long targetCount = startCount + coinsNeeded;
+      unsigned long timeout = millis() + 30000;  // 30 second timeout
+      
+      while (hoppers[hopperIdx]->getTotalCoins() < targetCount && millis() < timeout) {
+        hoppers[hopperIdx]->update();
+        
+        unsigned long currentCount = hoppers[hopperIdx]->getTotalCoins();
+        int dispensed = currentCount - startCount;
+        
+        // Update LCD
+        lcd.setCursor(7, 2);
+        lcd.print(dispensed);
+        
+        delay(50);
+      }
+      
+      unsigned long finalCount = hoppers[hopperIdx]->getTotalCoins();
+      int actuallyDispensed = finalCount - startCount;
+      
+      Serial.print("Dispensed: ");
+      Serial.print(actuallyDispensed);
+      Serial.print("/");
+      Serial.println(coinsNeeded);
+      
+      if (actuallyDispensed < coinsNeeded) {
+        Serial.println("WARNING: Dispensing incomplete!");
+      }
+      
+      delay(500);
+    }
+  }
+  
+  Serial.println("=== Dispensing Complete ===\n");
+  
+  // Move to complete state
+  currentState = STATE_COMPLETE;
+}
+
+void handleComplete() {
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Complete!");
+  lcd.setCursor(0, 1);
+  lcd.print("Dispensed: P");
+  lcd.print(currentPlan.totalValue);
+  
+  if (currentPlan.remainder > 0) {
+    lcd.setCursor(0, 2);
+    lcd.print("Remainder: P");
+    lcd.print(currentPlan.remainder);
+    lcd.setCursor(0, 3);
+    lcd.print("(Keep chit)");
+  } else {
+    lcd.setCursor(0, 2);
+    lcd.print("Thank you!");
+  }
+  
+  Serial.println("Transaction complete!");
+  
+  // Send completion message to RPi
+  Serial.print("DISPENSING_COMPLETE:");
+  Serial.println(currentPlan.totalValue);
+  
+  delay(5000);
+  
+  // Reset and return to idle
+  detectedChitValue = 0;
+  selectedDenomination = 5;
+  denominationIndex = 0;
+  currentPlan = {0, 0, 0, 0, 0, 0};
+  dispensedCoins = 0;
+  
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Ready!");
+  lcd.setCursor(0, 1);
+  lcd.print("Waiting for chit...");
+  
+  currentState = STATE_IDLE;
+}
+
+void handleError() {
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("ERROR!");
+  lcd.setCursor(0, 1);
+  lcd.print("Please contact");
+  lcd.setCursor(0, 2);
+  lcd.print("staff");
+  
+  Serial.println("ERROR STATE - Waiting for reset");
+  
+  delay(5000);
+  
+  // Return to idle after displaying error
+  currentState = STATE_IDLE;
+  
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Ready!");
+  lcd.setCursor(0, 1);
+  lcd.print("Waiting for chit...");
+}
+
+// Calculate coin combination based on ChitExchanger algorithm
+DispensePlan calculateCoinCombination(int chitValue, int preferredDenom) {
+  DispensePlan plan = {0, 0, 0, 0, 0, 0};
+  
+  int remaining = chitValue;
+  
+  // Algorithm similar to ChitExchanger.ino's calculateOptimalChits
+  // Prioritize preferred denomination, then fill with others
+  
+  if (preferredDenom == 20) {
+    plan.coins_20 = remaining / 20;
+    remaining %= 20;
+    plan.coins_10 = remaining / 10;
+    remaining %= 10;
+    plan.coins_5 = remaining / 5;
+    remaining %= 5;
+  } else if (preferredDenom == 10) {
+    plan.coins_10 = remaining / 10;
+    remaining %= 10;
+    plan.coins_20 = remaining / 20;
+    remaining %= 20;
+    plan.coins_5 = remaining / 5;
+    remaining %= 5;
+  } else {  // preferredDenom == 5
+    plan.coins_5 = remaining / 5;
+    remaining %= 5;
+  }
+  
+  plan.totalCoins = plan.coins_5 + plan.coins_10 + plan.coins_20;
+  plan.totalValue = (plan.coins_5 * 5) + (plan.coins_10 * 10) + (plan.coins_20 * 20);
+  plan.remainder = remaining;
+  
+  return plan;
+}
+
+// ========== SERIAL COMMUNICATION ==========
 
 void handleSerialCommands() {
   if (Serial.available()) {
     String command = Serial.readStringUntil('\n');
     command.trim();
     
-    // Check for test commands first (case-insensitive)
+    // Check for test commands first
     String lowerCommand = command;
     lowerCommand.toLowerCase();
     
     if (handleTestCommand(lowerCommand)) {
-      return; // Test command was processed
+      return;
     }
     
-    // Handle RPi commands (essential commands only)
+    // Handle RPi commands
     handleRPiCommand(command);
   }
 }
@@ -138,12 +547,10 @@ bool handleTestCommand(String command) {
       testPulseDetection(hopperId);
     } else {
       Serial.println("Usage: test_pulse 1/2/3");
-      Serial.println("Example: test_pulse 1 (tests hopper 1 pulse detection)");
     }
     return true;
   }
   else if (command.startsWith("test_relay")) {
-    // Parse "test_relay 1 on" or "test_relay 2 off"
     int firstSpace = command.indexOf(' ');
     int secondSpace = command.indexOf(' ', firstSpace + 1);
     
@@ -153,7 +560,6 @@ bool handleTestCommand(String command) {
       testRelayControl(hopperId, state);
     } else {
       Serial.println("Usage: test_relay 1/2/3 on/off");
-      Serial.println("Example: test_relay 1 on (turns on hopper 1 relay)");
     }
     return true;
   }
@@ -161,44 +567,59 @@ bool handleTestCommand(String command) {
     testAllComponents();
     return true;
   }
+  else if (command.startsWith("test_chit")) {
+    int spaceIndex = command.indexOf(' ');
+    if (spaceIndex > 0) {
+      int chitValue = command.substring(spaceIndex + 1).toInt();
+      testChitDetection(chitValue);
+    } else {
+      Serial.println("Usage: test_chit <value>");
+      Serial.println("Example: test_chit 50");
+    }
+    return true;
+  }
   else if (command == "help") {
     showTestHelp();
     return true;
   }
   
-  return false; // Not a test command
+  return false;
 }
 
 // RPi Communication Functions
 void handleRPiCommand(String command) {
   command.trim();
   
-  // Only essential RPi commands
-  if (command == CMD_DISPENSE_COINS) {
-    String coinSpec = command.substring(CMD_DISPENSE_COINS.length());
-    coinSpec.trim();
-    
-    bool success = dispenseSpecificCoins(coinSpec);
-    if (success) {
-      sendResponse("DISPENSE_COINS", "OK", "Coins dispensed successfully");
-    } else {
-      sendResponse("DISPENSE_COINS", "ERROR", "Failed to dispense specified coins");
+  // Handle CHIT_DETECTED:value
+  if (command.startsWith(CMD_CHIT_DETECTED + ":")) {
+    int colonIndex = command.indexOf(':');
+    if (colonIndex > 0) {
+      String valueStr = command.substring(colonIndex + 1);
+      int chitValue = valueStr.toInt();
+      
+      if (chitValue == 5 || chitValue == 10 || chitValue == 20 || chitValue == 50) {
+        Serial.print("Received chit detection: P");
+        Serial.println(chitValue);
+        
+        detectedChitValue = chitValue;
+        currentState = STATE_CHIT_DETECTED;
+      } else {
+        Serial.print("Invalid chit value: ");
+        Serial.println(chitValue);
+      }
     }
   }
-  else if (command == CMD_GET_COUNT) {
-    sendCountData();
+  else if (command == CMD_IR_DETECTED) {
+    Serial.println("IR sensor activated");
   }
-  else if (command == CMD_GET_STATUS) {
-    sendStatusData();
+  else if (command.startsWith(CMD_CHIT_RELEASED)) {
+    Serial.println("Chit released by RPi servo");
   }
-  else if (command == CMD_RESET_COUNT) {
-    coinHopper1.resetCounter();
-    coinHopper2.resetCounter();
-    coinHopper3.resetCounter();
-    for (int i = 0; i < NUM_COIN_HOPPERS; i++) {
-      lastCoinCount[i] = 0;
-    }
-    sendResponse("RESET_COUNT", "OK", "All counters reset");
+  else if (command == CMD_DETECTION_TIMEOUT) {
+    Serial.println("RPi detection timeout");
+  }
+  else if (command == CMD_SYSTEM_SHUTDOWN) {
+    Serial.println("RPi system shutting down");
   }
 }
 
@@ -640,40 +1061,59 @@ void testAllComponents() {
   Serial.println("✅ Comprehensive test completed!");
 }
 
+// Test chit detection (simulate RPi command)
+void testChitDetection(int chitValue) {
+  Serial.print("\n=== SIMULATING CHIT DETECTION: P");
+  Serial.print(chitValue);
+  Serial.println(" ===");
+  
+  if (chitValue != 5 && chitValue != 10 && chitValue != 20 && chitValue != 50) {
+    Serial.println("Invalid chit value! Use 5, 10, 20, or 50");
+    return;
+  }
+  
+  detectedChitValue = chitValue;
+  currentState = STATE_CHIT_DETECTED;
+  
+  Serial.println("Test started - follow LCD prompts");
+  Serial.println("Press button to cycle denominations and confirm");
+}
+
 void showTestHelp() {
-  Serial.println("=== COIN HOPPER TESTING COMMANDS ===");
+  Serial.println("\n=== COIN EXCHANGER HELP ===");
   Serial.println();
-  Serial.println("🔍 PULSE DETECTION TESTS:");
-  Serial.println("  test_pulse 1    - Test hopper 1 pulse detection (GPIO19, 5 PHP)");
-  Serial.println("  test_pulse 2    - Test hopper 2 pulse detection (GPIO18, 10 PHP)");
-  Serial.println("  test_pulse 3    - Test hopper 3 pulse detection (GPIO4, 20 PHP)");
+  Serial.println("🪙 SYSTEM WORKFLOW:");
+  Serial.println("  1. RPi detects chit with IR + YOLO");
+  Serial.println("  2. RPi sends CHIT_DETECTED:<value> to ESP32");
+  Serial.println("  3. ESP32 shows denomination selection on LCD");
+  Serial.println("  4. User presses button to cycle & confirm");
+  Serial.println("  5. ESP32 dispenses coins via 3 hoppers");
+  Serial.println("  6. Coins counted via pulse detection");
   Serial.println();
-  Serial.println("🔌 SSR RELAY TESTS:");
-  Serial.println("  test_relay 1 on  - Turn ON hopper 1 SSR (GPIO26)");
-  Serial.println("  test_relay 1 off - Turn OFF hopper 1 SSR (GPIO26)");
-  Serial.println("  test_relay 2 on  - Turn ON hopper 2 SSR (GPIO25)");
-  Serial.println("  test_relay 2 off - Turn OFF hopper 2 SSR (GPIO25)");
-  Serial.println("  test_relay 3 on  - Turn ON hopper 3 SSR (GPIO33)");
-  Serial.println("  test_relay 3 off - Turn OFF hopper 3 SSR (GPIO33)");
+  Serial.println("🧪 TEST COMMANDS:");
+  Serial.println("  test_chit 50    - Simulate 50 peso chit detection");
+  Serial.println("  test_pulse 1/2/3- Test pulse detection");
+  Serial.println("  test_relay 1/2/3 on/off - Test SSR relays");
+  Serial.println("  test_all        - Test all components");
+  Serial.println("  help            - Show this help");
   Serial.println();
-  Serial.println("🧪 COMPREHENSIVE TESTS:");
-  Serial.println("  test_all        - Test all hoppers and relays (15 sec)");
-  Serial.println("  help            - Show this help menu");
+  Serial.println("� RPi COMMANDS:");
+  Serial.println("  CHIT_DETECTED:<value> - Trigger chit processing");
+  Serial.println("    Example: CHIT_DETECTED:50");
+  Serial.println("  IR_DETECTED     - IR sensor activated");
+  Serial.println("  CHIT_RELEASED:<value> - Chit dispensed by servo");
   Serial.println();
-  Serial.println("📋 RPi COMMANDS (for production):");
-  Serial.println("  DISPENSE_COINS 5:X,10:Y,20:Z - Dispense specific coins");
-  Serial.println("  GET_COUNT       - Get current coin counts");
-  Serial.println("  GET_STATUS      - Get system status");
-  Serial.println("  RESET_COUNT     - Reset all counters");
+  Serial.println("💡 HARDWARE:");
+  Serial.println("  Button: GPIO27 (cycles denominations)");
+  Serial.println("  LCD: I2C 0x27 (20x4)");
+  Serial.println("  Hopper 1: GPIO19 + GPIO26 SSR (5 PHP)");
+  Serial.println("  Hopper 2: GPIO18 + GPIO25 SSR (10 PHP)");
+  Serial.println("  Hopper 3: GPIO4 + GPIO33 SSR (20 PHP)");
   Serial.println();
-  Serial.println("💡 Hardware Setup:");
-  Serial.println("  - Connect ALLAN coin hoppers to GPIO19, GPIO18, GPIO4");
-  Serial.println("  - Connect SSR relays to GPIO26, GPIO25, GPIO33");
-  Serial.println("  - Hopper values: 5PHP(H1), 10PHP(H2), 20PHP(H3)");
-  Serial.println();
-  Serial.println("🔧 Architecture:");
-  Serial.println("  - SOLID_STATE_RELAY class handles SSR control");
-  Serial.println("  - COIN_HOPPER class handles pulse detection & dispensing");
-  Serial.println("  - Modular design following SOLID principles");
-  Serial.println("=====================================");
+  Serial.println("🎯 EXAMPLE:");
+  Serial.println("  1. Type: test_chit 50");
+  Serial.println("  2. Press button to cycle: 5, 10, 20");
+  Serial.println("  3. Press again to confirm selection");
+  Serial.println("  4. System calculates & dispenses coins");
+  Serial.println("===========================\n");
 }
