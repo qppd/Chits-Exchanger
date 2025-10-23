@@ -4,9 +4,10 @@
 #include <Arduino.h>
 #include "PIN_CONFIGURATION.h"
 
-// Bill values supported by the acceptor
+// Bill values supported by TB-74 acceptor
 #define BILL_VALUE_20 20
 #define BILL_VALUE_50 50
+#define BILL_VALUE_100 100
 
 extern volatile unsigned int pulseCount;
 extern unsigned int billCredit;

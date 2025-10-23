@@ -64,7 +64,7 @@ void setup() {
   Serial.println("ChitExchanger initialized successfully!");
   Serial.println("Ready for automatic chit dispensing:");
   Serial.println("- Chit values: P5, P10, P20, P50");
-  Serial.println("- Bills accepted: P20, P50");
+  Serial.println("- Bills accepted: P20, P50, P100 (TB-74)");
   Serial.println("- Coins accepted: P1, P5, P10, P20");
   Serial.println("- Using 8 servos (4 pairs) for chit dispensing");
   Serial.println("");
@@ -310,16 +310,16 @@ void loop() {
 
   // Bill acceptor pulse counting and credit update
   // Show 'Counting...' while pulses are being received
-  if (pulseCount > 0 && (millis() - lastPulseTime <= 250)) {
+  // TB-74 timing: 150ms timeout after last pulse (pulses are 100ms apart)
+  if (pulseCount > 0 && (millis() - lastPulseTime <= 150)) {
     currentState = CALCULATING;
     displayMessage("Counting bills...", 0);
     char creditMsg[21];
-    int tempCredit = billCredit + getBillValue();
-    snprintf(creditMsg, sizeof(creditMsg), "CREDIT: P%d", tempCredit);
+    snprintf(creditMsg, sizeof(creditMsg), "Pulses: %d", pulseCount);
     displayMessage(creditMsg, 1);
   }
   // When counting is done, show final credit and start dispensing
-  else if (pulseCount > 0 && (millis() - lastPulseTime > 250)) {
+  else if (pulseCount > 0 && (millis() - lastPulseTime > 150)) {
     int billValue = getBillValue();
     if (billValue > 0) {
       billCredit += billValue;
