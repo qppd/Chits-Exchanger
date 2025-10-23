@@ -1043,9 +1043,144 @@ The model was trained on a comprehensive dataset of Philippine peso chit images 
 
 ## 📍 Pin Configuration
 
-### ESP32 Platform Pin Mapping
+### Complete System Wiring Diagram
 
-<div align="center">
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                            RASPBERRY PI 4                                   │
+│                                                                             │
+│  GPIO 2   (SDA) ──────→ LCD SDA (I2C Data)                                 │
+│  GPIO 3   (SCL) ──────→ LCD SCL (I2C Clock)                                │
+│  GPIO 17  (IN)  ──────→ IR Sensor OUT                                      │
+│  GPIO 22  (PWM) ──────→ Servo Signal Wire (Orange/Yellow)                  │
+│  5V             ──────→ Power Rail (+5V)                                   │
+│  GND            ──────→ Ground Rail (GND)                                  │
+│  USB            ──────→ ESP32 (Serial Communication)                       │
+│  Ethernet       ──────→ Network (for ESP32-CAM access)                     │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                               ESP32                                         │
+│                         (Coin Exchanger)                                    │
+│                                                                             │
+│  GPIO 21  (SDA) ──────→ LCD SDA (I2C Data)                                 │
+│  GPIO 22  (SCL) ──────→ LCD SCL (I2C Clock)                                │
+│  GPIO 27  (IN)  ──────→ Button (other side to GND)                         │
+│                                                                             │
+│  GPIO 19  (IN)  ──────→ Hopper 1 Pulse Out (5 PHP)                         │
+│  GPIO 26  (OUT) ──────→ SSR 1 Input + (Hopper 1 Power)                     │
+│                                                                             │
+│  GPIO 18  (IN)  ──────→ Hopper 2 Pulse Out (10 PHP)                        │
+│  GPIO 25  (OUT) ──────→ SSR 2 Input + (Hopper 2 Power)                     │
+│                                                                             │
+│  GPIO 4   (IN)  ──────→ Hopper 3 Pulse Out (20 PHP)                        │
+│  GPIO 33  (OUT) ──────→ SSR 3 Input + (Hopper 3 Power)                     │
+│                                                                             │
+│  TX/RX         ──────→ RPi USB (Serial)                                    │
+│  5V            ──────→ Power Supply (+5V)                                  │
+│  GND           ──────→ All GND connections                                 │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Detailed Component Connections
+
+#### IR Sensor Module
+```
+VCC  ──→ 5V (Raspberry Pi 5V)
+GND  ──→ GND (Raspberry Pi GND)
+OUT  ──→ GPIO 17 (Raspberry Pi GPIO 17)
+
+Notes:
+- OUT is active LOW (0V when object detected)
+- Adjust sensitivity potentiometer for detection distance
+- Typical detection range: 2-30cm
+```
+
+#### Servo Motor
+```
+Red   (Power)  ──→ 5V (Raspberry Pi 5V)
+Brown (Ground) ──→ GND (Raspberry Pi GND)
+Orange (Signal)──→ GPIO 22 (Raspberry Pi GPIO 22 - PWM)
+
+Notes:
+- Use external 5V power supply if servo draws >500mA
+- Signal wire expects 3.3V PWM (Pi GPIO is 3.3V compatible)
+- 50Hz PWM frequency
+- Pulse width: 500-2500μs for 0-180°
+```
+
+#### I2C LCD Display (20x4)
+```
+VCC ─→ 5V (Power Rail)
+GND ─→ GND (Ground Rail)
+SDA ─→ GPIO 2 (RPi SDA) or GPIO 21 (ESP32 SDA)
+SCL ─→ GPIO 3 (RPi SCL) or GPIO 22 (ESP32 SCL)
+
+Notes:
+- I2C Address: 0x27 (verify with i2cdetect -y 1 on RPi)
+- Contrast adjustable via potentiometer on back
+- Both RPi and ESP32 can share the same LCD via I2C bus
+```
+
+#### Push Button
+```
+Pin 1 ──→ ESP32 GPIO 27
+Pin 2 ──→ ESP32 GND
+
+Notes:
+- Internal pull-up enabled in software
+- Button press = LOW signal (0V)
+- Button release = HIGH signal (3.3V)
+- Debounce handled in software (200ms)
+```
+
+#### Coin Hopper + SSR Wiring (×3 sets)
+
+**Hopper 1 (5 PHP coins):**
+```
+SSR Input:
+  (+) ──→ ESP32 GPIO 26
+  (-) ──→ ESP32 GND
+
+SSR Load (Relay Output):
+  (+) ──→ 12V Power Supply (+)
+  (-) ──→ Hopper 1 Power (+)
+
+Hopper 1:
+  Power (+) ──→ SSR Load (-)
+  Power (-) ──→ 12V Supply (-)
+  Pulse Out ──→ ESP32 GPIO 19
+  GND ────────→ ESP32 GND
+```
+
+**Hopper 2 (10 PHP coins):** Same as above, but:
+- SSR 2 Input (+) ──→ ESP32 GPIO 25
+- Hopper 2 Pulse Out ──→ ESP32 GPIO 18
+
+**Hopper 3 (20 PHP coins):** Same as above, but:
+- SSR 3 Input (+) ──→ ESP32 GPIO 33
+- Hopper 3 Pulse Out ──→ ESP32 GPIO 4
+
+#### Power Supply Wiring
+
+```
+12V POWER SUPPLY (for Coin Hoppers):
+├─ (+12V) ──→ SSR 1/2/3 Load (+)
+└─ (GND)  ──→ Hopper 1/2/3 (-)
+
+5V POWER SUPPLY (for Logic):
+├─ (+5V)  ──→ Raspberry Pi, ESP32, LCD, IR Sensor, Servo
+└─ (GND)  ──→ Common Ground (all devices)
+
+Notes:
+- Use adequate current ratings:
+  * 12V supply: 3A minimum (1A per hopper)
+  * 5V supply: 5A minimum (RPi + ESP32 + peripherals)
+- Fuse all power lines
+- Use separate grounds, connect at power supply
+```
+
+### ESP32 Platform Pin Mapping
 
 | Component | GPIO Pin | Type | Description |
 |-----------|----------|------|-------------|
@@ -1056,11 +1191,7 @@ The model was trained on a comprehensive dataset of Philippine peso chit images 
 | **Piezo Buzzer** | 27 | Output | Audio feedback |
 | **Status LED** | 13 | Output | System status indicator |
 
-</div>
-
 ### Raspberry Pi Platform Pin Mapping
-
-<div align="center">
 
 | Component | GPIO Pin | Type | Description |
 |-----------|----------|------|-------------|
@@ -1075,28 +1206,7 @@ The model was trained on a comprehensive dataset of Philippine peso chit images 
 | **Camera Trigger** | 26 | Output | Camera capture trigger |
 | **ALLAN Hopper Status** | 27 | Input | ALLAN hopper status input |
 
-</div>
-
-### USB/Serial Connections (Raspberry Pi)
-
-<div align="center">
-
-| Device | Interface | Description |
-|--------|-----------|-------------|
-| **USB Camera** | USB 3.0 | High-resolution chit scanning |
-| **Audio System** | USB/3.5mm | Speakers and microphone |
-| **ALLAN Hopper 1** | USB-Serial 1 | 1 Peso coin dispenser |
-| **ALLAN Hopper 2** | USB-Serial 2 | 5 Peso coin dispenser |
-| **ALLAN Hopper 3** | USB-Serial 3 | 10 Peso coin dispenser |
-| **ALLAN Hopper 4** | USB-Serial 4 | 20 Peso coin dispenser |
-| **WiFi Module** | Built-in | Network communication |
-| **Bluetooth** | Built-in | Local device pairing |
-
-</div>
-
 ### PCA9685 Servo Channel Mapping (ESP32 Platform)
-
-<div align="center">
 
 | Denomination | Servo Pair | Channel 1 | Channel 2 | Operation Mode | Duration |
 |--------------|------------|-----------|-----------|----------------|----------|
@@ -1105,32 +1215,17 @@ The model was trained on a comprehensive dataset of Philippine peso chit images 
 | **₱10 Chits** | Pair 3 | 4 | 5 | Synchronized CW | 1050ms |
 | **₱5 Chits**  | Pair 4 | 6 | 7 | Synchronized CW | 1050ms |
 
-</div>
+### Safety Checklist
 
-**Servo Configuration Details:**
-- **Total Servos**: 8 continuous rotation (360°) servos
-- **Servo Pairs**: 4 pairs, with each pair working simultaneously
-- **PWM Driver**: PCA9685 16-channel (I2C address: 0x40)
-- **Control Method**: Time-based rotation with 1050ms dispensing duration
-- **PWM Values**: Forward (CW) = 450, Backward (CCW) = 300, Stop = 375
-- **Deactivation**: Servos fully deactivated (PWM=0) when not in use
-- **Total Cycle Time**: ~1.2 seconds per chit (1050ms rotation + 150ms buffer)
-- **Available Channels**: 8 additional channels (8-15) for future expansion
-
-**Testing Commands:**
-- `TEST` - Tests ₱10 servo pair (channels 4 & 5)
-- `TESTALL` - Tests all 4 servo pairs sequentially
-
-### ⚠️ Important Pin Notes
-- **ESP32 I2C Bus**: Shared between LCD (0x27) and PCA9685 (0x40) on GPIO 21/22
-- **ESP32 Interrupts**: GPIO 4 & 26 used for coin/bill detection (FALLING edge trigger)
-- **Debounce Protection**: Coin slot 50ms, Bill acceptor 100ms
-- **PCA9685 Power**: Requires external 5V/4A+ power supply for servos (separate from logic)
-- **Servo Current**: Each servo draws ~500mA under load; 8 servos = 4A total requirement
-- **RPi PWM Pins**: GPIO 18 & 19 support hardware PWM for precise servo and LED control
-- **USB Serial**: Multiple USB-to-serial adapters required for ALLAN hopper control
-- **Power Distribution**: Separate power rails for different voltage requirements
-- **Grounding**: Single-point grounding system to prevent ground loops
+✓ All grounds connected to common ground
+✓ 12V and 5V supplies isolated
+✓ SSRs rated for hopper current
+✓ Fuses on all power lines
+✓ No crossed connections (12V to 5V pins)
+✓ Polarity correct on all components
+✓ Servo powered adequately (external supply if needed)
+✓ ESP32 powered before connecting peripherals
+✓ I2C pull-up resistors present (usually on LCD module)
 
 ## 💻 Software Architecture
 
@@ -1867,6 +1962,111 @@ static routers=192.168.1.1
 static domain_name_servers=8.8.8.8 8.8.4.4
 ```
 
+### 🔧 System Configuration
+
+#### ESP32 Configuration
+Edit configuration in `ChitExchanger.ino`:
+```cpp
+// WiFi Configuration
+#define WIFI_SSID "YourNetwork"
+#define WIFI_PASSWORD "YourPassword"
+#define RPI_IP "192.168.1.100"
+#define RPI_PORT 8888
+
+// Hardware Configuration
+#define COIN_DEBOUNCE_MS 50
+#define BILL_DEBOUNCE_MS 100
+#define SERVO_SPEED 10
+```
+
+#### Raspberry Pi Configuration
+
+**Change Camera IP:**
+Edit `yolo_detect.py`:
+```python
+parser.add_argument('--camera_ip', default='192.168.1.21')
+```
+
+**Change Serial Port:**
+```bash
+python3 yolo_detect.py --esp32_port /dev/ttyUSB0
+```
+
+**Adjust Servo Angles:**
+Edit `yolo_detect.py`:
+```python
+SERVO_INITIAL_ANGLE = 39  # Starting position
+SERVO_RELEASE_ANGLE = 90  # Release position
+```
+
+**Change Coin Values:**
+Edit `source/esp32/CoinExchanger/PIN_CONFIGURATION.h`:
+```cpp
+#define COIN_HOPPER_1_VALUE 5   // Change hopper 1 value
+#define COIN_HOPPER_2_VALUE 10  // Change hopper 2 value
+#define COIN_HOPPER_3_VALUE 20  // Change hopper 3 value
+```
+
+### 🚀 Running the Complete System
+
+#### Start the System
+
+```bash
+# On Raspberry Pi
+cd source/rpi/yolo
+
+# Make sure pigpio is running
+sudo pigpiod
+
+# Start YOLO detection (replace with your camera IP and serial port)
+python3 yolo_detect.py \
+  --model yolo11n_ncnn_model \
+  --camera_ip 192.168.1.21 \
+  --esp32_port /dev/ttyUSB0
+```
+
+#### Complete Workflow Test
+
+1. **Insert a chit** into the IR sensor area
+   - You should see "IR SENSOR DETECTED CHIT" in terminal
+   
+2. **Wait for detection** (up to 10 seconds)
+   - YOLO will detect the denomination
+   - Terminal shows: "Detected: ₱50 chit"
+   - Servo releases the chit
+   
+3. **ESP32 LCD displays:**
+   ```
+   Chit Detected!
+   Value: P50
+   ```
+
+4. **Press button** to select denomination
+   - First press: Select 5 PHP coins
+   - Second press: Select 10 PHP coins
+   - Third press: Select 20 PHP coins
+   - Fourth press: Confirm selection
+   
+5. **LCD shows calculation:**
+   ```
+   Plan:
+   5P:2 10P:1 20P:2
+   Total: P50
+   ```
+
+6. **Coins dispense automatically**
+   - LCD shows progress for each hopper
+   - Pulse counting tracks each coin
+   
+7. **LCD shows completion:**
+   ```
+   Complete!
+   Dispensed: P50
+   Thank you!
+   ```
+
+8. **System resets** to idle after 5 seconds
+
 ### 🧪 Testing and Validation
 
 #### System Integration Testing
@@ -2292,7 +2492,57 @@ def validate_chit_detection():
 
 ## 🔧 Hardware Setup
 
-### 🛠️ Assembly Instructions
+### � Complete System Workflow
+
+#### Complete End-to-End Process
+This system exchanges detected chits (5, 10, 20, or 50 peso denominations) for coins using a fully automated workflow:
+
+**Phase 1: Chit Detection** (Raspberry Pi)
+- IR Sensor (GPIO 17) detects chit insertion
+- ESP32-CAM captures live video stream
+- YOLO Detection identifies chit denomination
+- Servo (GPIO 22) releases the chit after detection
+
+**Phase 2: Denomination Selection** (ESP32)
+- LCD displays detected chit value
+- User presses button to cycle through coin denominations (5, 10, 20)
+- Button press to confirm selection
+
+**Phase 3: Coin Calculation** (ESP32)
+- Calculates optimal coin combination
+- Displays plan on LCD showing required coins
+
+**Phase 4: Coin Dispensing** (ESP32 + 3 Hoppers)
+- Powers hoppers via SSR relays
+- Dispenses coins from 3 hoppers
+- Counts coins via pulse detection
+- Shows real-time progress on LCD
+
+**Phase 5: Completion** (ESP32)
+- Displays total dispensed amount
+- Shows remainder if applicable
+- Resets system to idle after 5 seconds
+
+#### Serial Communication Protocol
+
+**RPi → ESP32:**
+```
+CHIT_DETECTED:5        # 5 peso chit detected
+CHIT_DETECTED:10       # 10 peso chit detected
+CHIT_DETECTED:20       # 20 peso chit detected
+CHIT_DETECTED:50       # 50 peso chit detected
+IR_DETECTED            # IR sensor triggered
+CHIT_RELEASED:<value>  # Chit released by servo
+DETECTION_TIMEOUT      # Detection failed
+SYSTEM_SHUTDOWN        # RPi shutting down
+```
+
+**ESP32 → RPi:**
+```
+DISPENSING_COMPLETE:<value>  # Dispensed coins worth X pesos
+```
+
+### �🛠️ Assembly Instructions
 
 #### Step 1: ESP32 Preparation
 1. Mount ESP32 on breadboard or custom PCB
@@ -3140,6 +3390,69 @@ class SystemMonitor:
 ```
 
 ## 🔧 Troubleshooting
+
+### 🧪 Component Testing Procedures
+
+#### Test 1: ESP32 Coin Hoppers
+```
+1. Open Arduino Serial Monitor (115200 baud)
+2. Type: help
+3. Type: test_relay 1 on
+   - Hopper 1 should power on
+4. Type: test_pulse 1
+   - Drop coins into hopper 1
+   - Should see pulse detection messages
+5. Type: test_relay 1 off
+6. Repeat for hoppers 2 and 3
+```
+
+#### Test 2: ESP32-CAM Stream
+```
+1. Open browser
+2. Go to: http://<camera_ip>/stream
+3. You should see live video
+4. Test flash: http://<camera_ip>/flash/on
+```
+
+#### Test 3: Raspberry Pi Components
+```bash
+# Test IR Sensor
+cd source/rpi/test
+python3 ir_sensor_tester.py
+# Wave hand in front of sensor - should detect
+
+# Test Servo
+python3 servo_tester.py
+# Servo should move between 40° and 90°
+
+# Test LCD
+python3 lcd_tester.py
+# LCD should display test messages
+```
+
+#### Test 4: Serial Communication
+```
+Terminal 1 (RPi):
+  screen /dev/ttyUSB0 115200
+  
+Terminal 2 (ESP32 Serial Monitor):
+  Type: test_chit 50
+  
+You should see messages flowing between devices
+Press Ctrl+A then K to exit screen
+```
+
+#### Test Commands Summary
+
+**ESP32 Test Commands:**
+```
+test_chit 50           - Simulate 50 peso chit detection
+test_pulse 1           - Test hopper 1 pulse detection
+test_relay 1 on        - Turn on hopper 1
+test_relay 1 off       - Turn off hopper 1
+test_all               - Test all components
+help                   - Show help menu
+```
 
 ### ⚠️ Common Issues
 
