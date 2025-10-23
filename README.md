@@ -235,7 +235,7 @@ The **IoT Chits Exchanger** is an intelligent, dual-platform automated currency 
 | Component | Model/Type | Quantity | Function |
 |-----------|------------|----------|----------|
 | **Single Board Computer** | Raspberry Pi 4B (4GB+) | 1 | AI processing and system control |
-| **Camera Module** | Pi Camera V3 (12MP) or USB 4K | 1 | High-resolution chit scanning |
+| **Camera Module** | ESP32-CAM (OV2640) | 1 | Real-time video streaming for YOLO detection |
 | **LCD Display** | 20x4 I2C LCD | 1 | User interface display |
 | **Chit Insertion Servo** | High-Torque Digital Servo | 1 | Automated chit feeding |
 | **Standard Coin Hopper** | Motorized Hopper (from ESP32) | 1 | Basic coin dispensing |
@@ -297,15 +297,22 @@ Common Commands:
 - 0x35: Reset hopper
 ```
 
-### Camera System Specifications
+### ESP32-CAM System Specifications
 
-#### Hardware Requirements
-- **Resolution**: Minimum 1920x1080 (Full HD)
-- **Frame Rate**: 30+ FPS for real-time processing
-- **Lens**: Fixed focus or auto-focus with macro capability
-- **Sensor**: CMOS with good low-light performance
-- **Interface**: USB 3.0 or CSI for Raspberry Pi
-- **Mounting**: Adjustable positioning for optimal scanning angle
+#### Hardware Specifications
+- **Camera Sensor**: OV2640 2MP CMOS
+- **Resolution**: VGA (640x480) for streaming
+- **Frame Rate**: 30 FPS smooth video
+- **Interface**: WiFi (HTTP MJPEG streaming)
+- **Flash LED**: GPIO 4, adjustable brightness
+- **Mounting**: Adjustable positioning for optimal chit scanning
+- **Power**: 5V/1A (300mA streaming, +120mA with flash)
+
+#### Network Configuration
+- **WiFiManager**: Auto-configuration with fallback AP
+- **Default AP**: ESP32CAM_AP / 12345678
+- **Stream URL**: http://[IP]/stream
+- **Default IPs**: 192.168.1.21 or 192.168.1.15
 
 #### Lighting Setup
 - **Type**: LED ring light or strip lighting
@@ -474,18 +481,27 @@ The ESP32-CAM case (`model/CE3V3SE_ESP32-CAM_-_ESP32-CAM-MB_Case.gcode`) is a pr
 ```
 COMPLETE SYSTEM ARCHITECTURE
 ├── ESP32 Platform (Cash → Chits)
-│   ├── Coin Slot (GPIO 27)
+│   ├── Coin Slot (GPIO 4)
 │   ├── Bill Acceptor (GPIO 26)
-│   ├── PCA9685 PWM Driver (I2C)
+│   ├── PCA9685 PWM Driver (I2C - 8 servos)
 │   ├── 20x4 LCD Display (I2C)
-│   ├── Control Buttons (GPIO 8, 9)
-│   └── Piezo Buzzer (GPIO 12)
+│   └── Piezo Buzzer (GPIO 27)
 │
-└── Raspberry Pi Platform (Chits → Coins)
-    ├── Camera System (USB/CSI)
+├── ESP32-CAM Platform (Video Streaming)
+│   ├── OV2640 Camera Sensor (2MP)
+│   ├── WiFiManager (Auto-configuration)
+│   ├── HTTP MJPEG Server (Port 80)
+│   ├── Flash LED (GPIO 4)
+│   └── Stream URL: http://[IP]/stream
+│
+└── Raspberry Pi Platform (Chits → Coins + AI Detection)
+    ├── YOLOv11 AI System
+    │   ├── ESP32-CAM Stream Connection
+    │   ├── Real-time Object Detection
+    │   ├── Model: yolo11n.pt (99.5% mAP)
+    │   └── Confidence Threshold: 0.5
     ├── Chit Insertion Servo (GPIO 18)
     ├── LED Lighting System (GPIO 19)
-        ├── Touch Display (HDMI + USB)
     ├── Audio System (3.5mm/USB)
     ├── Standard Coin Hopper (GPIO 20, 21)
     ├── ALLAN Coin Hoppers (4x Serial)
@@ -509,19 +525,117 @@ The ESP32 system follows a centralized architecture for cash-to-chits conversion
 
 ```
 ESP32 Microcontroller (Cash Processing Hub)
-├── 🪙 Coin Slot (GPIO 27) ────────── Interrupt-driven detection
-├── 💵 Bill Acceptor (GPIO 26) ───── TB74 pulse logic
-├── 🤖 PCA9685 PWM Driver (I2C) ──── Servo motor control
+├── 🪙 Coin Slot (GPIO 4) ─────────── Interrupt-driven detection (50ms debounce)
+├── 💵 Bill Acceptor (GPIO 26) ───── TB74 pulse logic (100ms debounce)
+├── 🤖 PCA9685 PWM Driver (I2C) ──── 8-servo motor control
 │   ├── SDA (GPIO 21)
 │   └── SCL (GPIO 22)
 ├── 📺 20x4 LCD Display (I2C) ────── User interface
 │   ├── SDA (GPIO 21)
 │   └── SCL (GPIO 22)
-├── 🎮 Control Buttons
-│   ├── LCD Button (GPIO 8)
-│   └── Coin Button (GPIO 9)
-└── 🔊 Piezo Buzzer (GPIO 12) ───── Audio feedback
+└── 🔊 Piezo Buzzer (GPIO 27) ───── Audio feedback
 ```
+
+### 📷 ESP32-CAM Video Streaming Platform
+
+The ESP32-CAM module provides real-time MJPEG video streaming for the chit recognition system, enabling the Raspberry Pi to perform AI-based detection.
+
+#### Key Features
+- **WiFiManager Integration**: Automatic WiFi configuration with fallback AP mode
+- **MJPEG HTTP Streaming**: Real-time video stream accessible via HTTP
+- **Flash LED Control**: Adjustable illumination (GPIO 4) for optimal image capture
+- **Dual Frame Buffer**: Smooth streaming at 30fps
+- **VGA Resolution**: 640x480 @ JPEG quality 12 for balance between quality and bandwidth
+
+#### Network Configuration
+
+**Default Access Point Mode:**
+```
+SSID: ESP32CAM_AP
+Password: 12345678
+Configuration Portal: ESP32CAM_ConfigAP
+Timeout: 180 seconds (3 minutes)
+```
+
+**Stream Endpoints:**
+- Station Mode: `http://[assigned-ip]/stream`
+- Default AP Mode: `http://192.168.1.21/stream`
+- Alternative: `http://192.168.1.15/stream` (configurable)
+
+#### WiFiManager Auto-Configuration
+
+The ESP32-CAM uses WiFiManager for seamless network setup:
+
+1. **First Boot**: Creates AP `ESP32CAM_ConfigAP`
+2. **Connect to AP**: Use any device to connect to the configuration portal
+3. **Select WiFi**: Choose your WiFi network and enter password
+4. **Auto-Connect**: ESP32-CAM remembers credentials and auto-connects on subsequent boots
+5. **Fallback**: If connection fails, returns to AP mode after timeout
+
+#### Hardware Pin Configuration (AI-Thinker Module)
+
+```cpp
+Camera Interface:
+├── PWDN:   GPIO 32  (Power down control)
+├── RESET:  -1       (Not used)
+├── XCLK:   GPIO 0   (External clock)
+├── SIOD:   GPIO 26  (I2C Data for camera sensor)
+├── SIOC:   GPIO 27  (I2C Clock for camera sensor)
+├── Y9-Y2:  GPIO 35, 34, 39, 36, 21, 19, 18, 5 (8-bit parallel data)
+├── VSYNC:  GPIO 25  (Vertical sync)
+├── HREF:   GPIO 23  (Horizontal reference)
+└── PCLK:   GPIO 22  (Pixel clock)
+
+Peripherals:
+└── Flash LED: GPIO 4 (Built-in flash/illumination)
+```
+
+#### Camera Specifications
+
+| Parameter | Value | Description |
+|-----------|-------|-------------|
+| **Sensor** | OV2640 | 2MP CMOS image sensor |
+| **Resolution** | VGA (640x480) | Optimized for streaming |
+| **Frame Rate** | 30 FPS | Smooth real-time video |
+| **JPEG Quality** | 12 | Balance of quality/compression |
+| **Clock Speed** | 20 MHz | XCLK frequency |
+| **Frame Buffers** | 2 | Double buffering for smooth streaming |
+| **Pixel Format** | JPEG | Compressed format for efficiency |
+
+#### Integration with Raspberry Pi YOLO System
+
+```
+ESP32-CAM Workflow:
+1. Boot → WiFiManager checks saved credentials
+2. Connect to WiFi → Obtain IP address
+3. Initialize OV2640 camera sensor
+4. Start HTTP server on port 80
+5. Stream MJPEG at /stream endpoint
+6. Raspberry Pi connects to stream URL
+7. YOLO model processes frames in real-time
+8. Flash LED adjustable via web interface
+```
+
+#### Stream URL Configuration
+
+**For YOLO Detection System:**
+```python
+# In yolo_detect.py
+img_source = 'http://192.168.1.21/stream'  # Default ESP32-CAM IP
+```
+
+**Change IP Address:**
+- Update `img_source` in `yolo_detect.py` to match your ESP32-CAM IP
+- Check serial monitor for assigned IP after WiFi connection
+- Access web interface at `http://[ESP32-CAM-IP]/` for camera controls
+
+#### Power Requirements
+- **Operating Voltage**: 5V DC
+- **Current Draw**: 
+  - Idle: ~180mA
+  - Streaming: ~300mA
+  - Flash LED On: +120mA
+- **Recommended Power**: 5V/1A minimum
 
 ### 🤖 Raspberry Pi Platform Connection Overview
 
@@ -606,26 +720,80 @@ YOLOv11 Chit Detection Model
 - **Validation Split**: 80% training, 20% validation
 - **Test Accuracy**: 99.5%+ on validation set
 
-#### Real-time Processing Pipeline
+#### YOLO Real-time Detection System
+
+##### System Workflow
 ```python
-Image Processing Pipeline:
-1. 📸 Camera Capture (1920x1080 @ 30fps)
-2. 🔧 Preprocessing
-   ├── Resize to 640x640
-   ├── Normalize pixel values
-   └── Convert to tensor format
+YOLO Detection Pipeline:
+1. 📸 ESP32-CAM Stream Connection
+   ├── HTTP/RTSP stream: http://192.168.1.21/stream
+   ├── Resolution: VGA (640x480) @ 30fps
+   └── MJPEG format for real-time streaming
+
+2. 🔧 Frame Preprocessing
+   ├── Capture frame from stream
+   ├── Resize to 640x640 (model input size)
+   ├── Normalize pixel values [0-1]
+   └── Convert BGR to RGB format
+
 3. 🧠 YOLOv11 Inference
-   ├── Feature extraction
-   ├── Object detection/classification
+   ├── Model: yolo11n.pt (nano variant)
+   ├── Feature extraction via CSPDarkNet53
+   ├── Multi-scale detection head
+   └── Real-time classification (4 classes)
+
 4. 📊 Post-processing
-   ├── Non-maximum suppression
-   ├── Confidence filtering
-   └── Result validation
-5. 💰 Coin Dispensing
-   ├── Denomination mapping
-   ├── ALLAN hopper control
+   ├── Confidence filtering (threshold: 0.5)
+   ├── Non-maximum suppression (IoU: 0.7)
+   ├── Bounding box refinement
+   └── Class label assignment
+
+5. 🖼️ Visualization
+   ├── Draw bounding boxes (Tableau 10 colors)
+   ├── Display class labels and confidence
+   ├── Show FPS and frame statistics
+   └── Optional video recording
+
+6. 💰 Action Trigger
+   ├── Denomination identification
+   ├── Coin hopper control signal
    └── Transaction logging
 ```
+
+##### Command-Line Arguments
+```bash
+# Basic usage
+python3 yolo_detect.py --model yolo11n.pt --thresh 0.5
+
+# With custom confidence threshold
+python3 yolo_detect.py --model runs/train/weights/best.pt --thresh 0.7
+
+# With resolution and recording
+python3 yolo_detect.py --model yolo11n.pt --resolution 1280x720 --record
+
+# Available arguments:
+--model      : Path to YOLO model file (required)
+--thresh     : Confidence threshold (default: 0.5)
+--resolution : Display resolution WxH (default: source resolution)
+--record     : Enable video recording (requires --resolution)
+```
+
+##### Performance Characteristics
+| Metric | Value | Notes |
+|--------|-------|-------|
+| **Model Size** | ~6 MB | YOLOv11n nano variant |
+| **Inference Time** | ~200-500ms | Raspberry Pi 4B (no GPU) |
+| **Detection Rate** | 30 FPS | Limited by camera stream |
+| **Confidence Threshold** | 0.5 (default) | Adjustable via --thresh |
+| **IoU Threshold** | 0.7 | For NMS post-processing |
+| **Classes** | 4 | ₱5, ₱10, ₱20, ₱50 chits |
+
+##### Visualization Features
+- **Bounding Boxes**: Color-coded by class (Tableau 10 palette)
+- **Labels**: Class name + confidence percentage
+- **FPS Counter**: Real-time frame rate display
+- **Frame Statistics**: Average FPS over 200 frames
+- **Recording**: Optional .avi video output
 
 ### 🔗 Inter-System Communication Protocol
 
@@ -646,6 +814,210 @@ Communication Protocol:
     ├── Error notifications
     └── System commands
 ```
+
+### 📊 ML Model Training Results & Performance
+
+#### YOLOv11 Training Configuration
+
+The YOLOv11 chit detection model was trained with the following specifications:
+
+**Model Architecture:**
+- Base Model: YOLOv11n (nano variant for embedded systems)
+- Input Size: 640x640 pixels
+- Batch Size: 16
+- Total Epochs: 2000 (with early stopping)
+- Patience: 100 epochs (stop if no improvement)
+
+**Training Parameters:**
+- Initial Learning Rate (lr0): 0.01
+- Final Learning Rate (lrf): 0.01
+- Optimizer: Auto (AdamW)
+- Momentum: 0.937
+- Weight Decay: 0.0005
+- Warmup Epochs: 3
+- IoU Threshold: 0.7
+- Max Detections per Image: 300
+
+**Data Augmentation Strategy:**
+```yaml
+HSV Adjustments:
+  - Hue: 0.015
+  - Saturation: 0.7
+  - Value: 0.4
+  
+Geometric Transforms:
+  - Translation: 0.1
+  - Scale: 0.5
+  - Horizontal Flip: 0.5
+  
+Advanced Augmentation:
+  - Mosaic: 1.0 (4-image mosaic)
+  - Copy-Paste: 0.0
+  - Mixup: 0.0
+```
+
+#### Training Performance Metrics
+
+##### Best Model Performance
+Achieved at epoch 49 with outstanding results:
+
+| Metric | Value | Description |
+|--------|-------|-------------|
+| **mAP@0.5** | **99.5%** | Mean Average Precision at 50% IoU threshold |
+| **mAP@0.5:0.95** | **86.6%** | Mean Average Precision across IoU 0.5-0.95 |
+| **Precision** | **94.1%** | Accuracy of positive predictions |
+| **Recall** | **99.5%** | Percentage of actual chits detected |
+| **F1-Score** | **96.7%** | Harmonic mean of precision and recall |
+| **Box Loss** | 0.604 | Bounding box regression loss |
+| **Class Loss** | 0.944 | Classification loss |
+
+##### Training Progress Summary
+```
+Total Training Epochs: 489 (stopped early due to convergence)
+Training Time: ~130 minutes
+Final Model Size: ~6MB (yolo11n.pt)
+Classes Detected: 4 (₱5, ₱10, ₱20, ₱50 chits)
+```
+
+#### Training Visualizations
+
+<div align="center">
+
+##### Confusion Matrix Analysis
+
+**Normalized Confusion Matrix**
+<img src="ml/training/train/confusion_matrix_normalized.png" alt="Normalized Confusion Matrix" width="600"/>
+<p><em>Shows per-class classification accuracy - diagonal values indicate correct predictions</em></p>
+
+**Raw Confusion Matrix**
+<img src="ml/training/train/confusion_matrix.png" alt="Confusion Matrix" width="600"/>
+<p><em>Absolute prediction counts for each class combination</em></p>
+
+---
+
+##### Performance Curves
+
+**Precision-Recall Curve**
+<img src="ml/training/train/BoxPR_curve.png" alt="Precision-Recall Curve" width="600"/>
+<p><em>Trade-off between precision and recall across all classes</em></p>
+
+**F1-Score Confidence Curve**
+<img src="ml/training/train/BoxF1_curve.png" alt="F1 Score Curve" width="600"/>
+<p><em>Optimal F1 score of 0.95 achieved at confidence threshold 0.523</em></p>
+
+**Precision-Confidence Curve**
+<img src="ml/training/train/BoxP_curve.png" alt="Precision Curve" width="600"/>
+<p><em>Precision values across different confidence thresholds</em></p>
+
+**Recall-Confidence Curve**
+<img src="ml/training/train/BoxR_curve.png" alt="Recall Curve" width="600"/>
+<p><em>Recall performance across confidence thresholds</em></p>
+
+---
+
+##### Complete Training Metrics
+
+**Training Results Dashboard**
+<img src="ml/training/train/results.png" alt="Training Results" width="800"/>
+<p><em>Comprehensive view: box loss, class loss, DFL loss, precision, recall, mAP50, and mAP50-95 over 489 epochs</em></p>
+
+---
+
+##### Dataset Statistics
+
+**Label Distribution & Bounding Box Analysis**
+<img src="ml/training/train/labels.jpg" alt="Label Distribution" width="700"/>
+<p><em>Training dataset statistics: class distribution, bounding box dimensions, and spatial distribution</em></p>
+
+---
+
+##### Training Batch Samples
+
+**Augmented Training Batches**
+<table>
+<tr>
+<td><img src="ml/training/train/train_batch0.jpg" alt="Training Batch 0" width="300"/></td>
+<td><img src="ml/training/train/train_batch1.jpg" alt="Training Batch 1" width="300"/></td>
+<td><img src="ml/training/train/train_batch2.jpg" alt="Training Batch 2" width="300"/></td>
+</tr>
+<tr>
+<td colspan="3"><em>Sample training batches showing data augmentation effects (mosaic, HSV adjustments, scaling)</em></td>
+</tr>
+</table>
+
+---
+
+##### Validation Results Comparison
+
+**Ground Truth vs Model Predictions**
+<table>
+<tr>
+<td width="50%"><img src="ml/training/train/val_batch0_labels.jpg" alt="Validation Ground Truth" width="100%"/></td>
+<td width="50%"><img src="ml/training/train/val_batch0_pred.jpg" alt="Validation Predictions" width="100%"/></td>
+</tr>
+<tr>
+<td align="center"><strong>Ground Truth Labels</strong></td>
+<td align="center"><strong>Model Predictions</strong></td>
+</tr>
+<tr>
+<td colspan="2"><em>Visual comparison showing high prediction accuracy on validation set</em></td>
+</tr>
+</table>
+
+</div>
+
+#### Model Files & Checkpoints
+
+```
+ml/
+├── training/
+│   ├── my_model.pt                        # Main trained YOLOv11 model
+│   └── train/
+│       ├── args.yaml                     # Complete training configuration
+│       ├── results.csv                   # Per-epoch metrics (489 epochs)
+│       ├── results.png                   # Training curves visualization
+│       ├── confusion_matrix.png           # Raw confusion matrix
+│       ├── confusion_matrix_normalized.png # Normalized confusion matrix
+│       ├── BoxPR_curve.png               # Precision-Recall curve
+│       ├── BoxF1_curve.png               # F1 score curve
+│       ├── BoxP_curve.png                # Precision curve
+│       ├── BoxR_curve.png                # Recall curve
+│       ├── labels.jpg                    # Dataset statistics
+│       ├── train_batch0.jpg              # Training sample batch 1
+│       ├── train_batch1.jpg              # Training sample batch 2
+│       ├── train_batch2.jpg              # Training sample batch 3
+│       ├── val_batch0_labels.jpg         # Validation ground truth
+│       ├── val_batch0_pred.jpg           # Validation predictions
+│       └── weights/
+│           ├── best.pt                   # Best checkpoint (mAP: 99.5%)
+│           └── last.pt                   # Latest checkpoint
+└── converted_tflite_quantized/
+    ├── model.tflite                      # Quantized TFLite model
+    └── labels.txt                        # Class labels (5, 10, 20, 50)
+```
+
+#### Key Training Insights
+
+**Model Strengths:**
+- ✅ **Exceptional Detection Rate**: 99.5% recall ensures virtually no chits are missed
+- ✅ **High Precision**: 94.1% precision minimizes false positives
+- ✅ **Robust Performance**: mAP@0.5:0.95 of 86.6% indicates consistent accuracy across IoU thresholds
+- ✅ **Fast Convergence**: Early stopping at epoch 489 (out of 2000) due to optimal performance
+- ✅ **Balanced Metrics**: F1-score of 96.7% demonstrates excellent precision-recall balance
+
+**Recommended Deployment Settings:**
+- Confidence Threshold: **0.5** (default) for balanced performance
+- IoU Threshold: **0.7** for accurate bounding box matching
+- Optimal F1 Threshold: **0.523** for maximum F1-score (0.95)
+
+#### Training Data Collection
+
+The model was trained on a comprehensive dataset of Philippine peso chit images with:
+- Multiple viewing angles and orientations
+- Various lighting conditions (indoor, outdoor, artificial)
+- Different wear states (new, slightly worn, heavily used)
+- Background variations (clean surface, textured surfaces)
+- Occlusion scenarios (partially visible chits)
 
 #### Message Format Examples
 ```json
@@ -677,16 +1049,12 @@ Communication Protocol:
 
 | Component | GPIO Pin | Type | Description |
 |-----------|----------|------|-------------|
-| **Coin Slot** | 27 | Input (Pullup) | Coin detection interrupt |
+| **Coin Slot** | 4 | Input (Pullup) | Coin detection interrupt |
 | **Bill Acceptor** | 26 | Input (Pullup) | Bill acceptance interrupt |
 | **I2C SDA** | 21 | I2C Data | LCD & PCA9685 data line |
 | **I2C SCL** | 22 | I2C Clock | LCD & PCA9685 clock line |
-| **LCD Button** | 8 | Input (Pullup) | LCD menu navigation |
-| **Coin Button** | 9 | Input (Pullup) | Manual operation button |
-| **Piezo Buzzer** | 12 | Output | Audio feedback |
+| **Piezo Buzzer** | 27 | Output | Audio feedback |
 | **Status LED** | 13 | Output | System status indicator |
-| **Control Button** | 2 | Input | Main system control |
-| **Control Button** | 2 | Input | Main system control |
 
 </div>
 
@@ -732,10 +1100,10 @@ Communication Protocol:
 
 | Denomination | Servo Pair | Channel 1 | Channel 2 | Operation Mode | Duration |
 |--------------|------------|-----------|-----------|----------------|----------|
-| **₱50 Chits** | Pair 1 | 0 | 1 | Synchronized CW | 800ms |
-| **₱20 Chits** | Pair 2 | 2 | 3 | Synchronized CW | 700ms |
-| **₱10 Chits** | Pair 3 | 4 | 5 | Synchronized CW | 600ms |
-| **₱5 Chits**  | Pair 4 | 6 | 7 | Synchronized CW | 500ms |
+| **₱50 Chits** | Pair 1 | 0 | 1 | Synchronized CW | 1050ms |
+| **₱20 Chits** | Pair 2 | 2 | 3 | Synchronized CW | 1050ms |
+| **₱10 Chits** | Pair 3 | 4 | 5 | Synchronized CW | 1050ms |
+| **₱5 Chits**  | Pair 4 | 6 | 7 | Synchronized CW | 1050ms |
 
 </div>
 
@@ -743,9 +1111,10 @@ Communication Protocol:
 - **Total Servos**: 8 continuous rotation (360°) servos
 - **Servo Pairs**: 4 pairs, with each pair working simultaneously
 - **PWM Driver**: PCA9685 16-channel (I2C address: 0x40)
-- **Control Method**: Time-based rotation with denomination-specific durations
+- **Control Method**: Time-based rotation with 1050ms dispensing duration
 - **PWM Values**: Forward (CW) = 450, Backward (CCW) = 300, Stop = 375
 - **Deactivation**: Servos fully deactivated (PWM=0) when not in use
+- **Total Cycle Time**: ~1.2 seconds per chit (1050ms rotation + 150ms buffer)
 - **Available Channels**: 8 additional channels (8-15) for future expansion
 
 **Testing Commands:**
@@ -754,8 +1123,9 @@ Communication Protocol:
 
 ### ⚠️ Important Pin Notes
 - **ESP32 I2C Bus**: Shared between LCD (0x27) and PCA9685 (0x40) on GPIO 21/22
-- **ESP32 Interrupts**: GPIO 26 & 27 support external interrupts for coin/bill detection
-- **PCA9685 Power**: Requires external 5V power supply for servos (separate from logic)
+- **ESP32 Interrupts**: GPIO 4 & 26 used for coin/bill detection (FALLING edge trigger)
+- **Debounce Protection**: Coin slot 50ms, Bill acceptor 100ms
+- **PCA9685 Power**: Requires external 5V/4A+ power supply for servos (separate from logic)
 - **Servo Current**: Each servo draws ~500mA under load; 8 servos = 4A total requirement
 - **RPi PWM Pins**: GPIO 18 & 19 support hardware PWM for precise servo and LED control
 - **USB Serial**: Multiple USB-to-serial adapters required for ALLAN hopper control
@@ -873,19 +1243,21 @@ model/
     └── Chit_Dispenser_Full_View.png
 ```
 
-#### Raspberry Pi Platform (Chits to Coins)
+#### Raspberry Pi Platform (Chits to Coins - YOLO Detection)
 ```
-source/rpi/ChitExchanger/
-├── 📄 main.py                    # Main application entry point
-├── 🤖 ai_detection/
-│   ├── yolo_model.py            # YOLOv11 model implementation
-│   ├── chit_classifier.py       # Chit classification logic
-│   ├── image_preprocessor.py    # Image preprocessing pipeline
-│   ├── model_trainer.py         # Training script for custom model
-│   └── models/
-│       ├── yolov11_chit.pt      # Trained YOLOv11 model weights
-│       ├── class_names.txt      # Class labels (5,10,20,50 peso)
-│       └── config.yaml          # Model configuration
+source/rpi/yolo/
+├── 📄 yolo_detect.py            # Main YOLO detection script
+├── 🤖 yolo11n.pt                # YOLOv11 nano model weights
+├── 🤖 yolo11n.torchscript       # TorchScript optimized model
+├── 📋 requirements.txt          # Python dependencies
+├── 🚀 start.sh                  # Launch script
+├── 📁 runs/detect/predict/      # Detection output directory
+│   ├── bus.jpg                  # Sample detection output
+│   └── zidane.jpg               # Sample detection output
+└── 📁 yolo11n_ncnn_model/       # NCNN optimized model
+    ├── metadata.yaml            # Model metadata
+    ├── model_ncnn.py            # NCNN inference script
+    └── model.ncnn.param         # NCNN parameters
 ├── 🎯 hardware_control/
 │   ├── servo_controller.py      # Chit insertion servo control
 │   ├── camera_manager.py        # Camera system management
@@ -1291,14 +1663,57 @@ cd source/esp32/ChitExchanger
 4. Configure WiFi credentials in the code
 5. Click **Upload** button (or Ctrl+U)
 
-#### 🤖 Raspberry Pi Platform Setup
+#### 📷 ESP32-CAM Platform Setup
+
+##### 1. Arduino IDE Setup for ESP32-CAM
+```bash
+# Install ESP32 board support in Arduino IDE
+# Go to File > Preferences > Additional Board Manager URLs
+# Add: https://dl.espressif.com/dl/package_esp32_index.json
+
+# Install required libraries via Library Manager:
+# - WiFiManager by tzapu (v2.0.0+)
+# - ESP32 Camera Driver (included in ESP32 core)
+```
+
+##### 2. Upload ESP32-CAM Code
+1. Open `source/esp32cam/IPCamera/IPCamera.ino` in Arduino IDE
+2. Select **Board**: AI Thinker ESP32-CAM
+3. Select **Port**: COM port of USB programmer (FTDI/CH340)
+4. Click **Upload**
+5. Open **Serial Monitor** at 115200 baud
+6. Note the assigned IP address after WiFi connection
+
+##### 3. Configure WiFi (First Time Setup)
+```
+1. Power on ESP32-CAM module
+2. Connect to "ESP32CAM_ConfigAP" WiFi (password: 12345678)
+3. Browser automatically opens configuration portal
+4. Select your WiFi network and enter password
+5. ESP32-CAM saves credentials and connects
+6. Future boots will auto-connect to saved network
+```
+
+##### 4. Test Camera Stream
+```bash
+# Open browser and navigate to:
+http://[ESP32-CAM-IP]/stream
+
+# Or use VLC media player for stream testing:
+vlc http://[ESP32-CAM-IP]/stream
+
+# Test with curl:
+curl -I http://[ESP32-CAM-IP]/stream
+```
+
+#### 🤖 Raspberry Pi YOLO Platform Setup
 
 ##### 1. Operating System Installation
 ```bash
 # Download and flash Raspberry Pi OS (64-bit Desktop)
 # Use Raspberry Pi Imager: https://rpi.org/imager
 
-# Enable SSH, I2C, Camera in raspi-config
+# Enable SSH and I2C in raspi-config
 sudo raspi-config
 ```
 
@@ -1308,9 +1723,9 @@ sudo raspi-config
 sudo apt update && sudo apt upgrade -y
 
 # Install system dependencies
-sudo apt install -y python3-pip python3-venv git cmake build-essential
-sudo apt install -y libgtk-3-dev libcanberra-gtk-module libcanberra-gtk3-module
-sudo apt install -y python3-pyqt5 python3-pyqt5.qtquick qml-module-qtquick-controls2
+sudo apt install -y python3-pip python3-venv git
+sudo apt install -y python3-opencv libopencv-dev
+sudo apt install -y libatlas-base-dev libhdf5-dev
 ```
 
 ##### 3. Repository Setup
@@ -1318,57 +1733,102 @@ sudo apt install -y python3-pyqt5 python3-pyqt5.qtquick qml-module-qtquick-contr
 # Clone repository
 cd ~
 git clone https://github.com/qppd/Chits-Exchanger.git
-cd Chits-Exchanger/source/rpi/ChitExchanger
-
-# Create Python virtual environment
-python3 -m venv venv
-source venv/bin/activate
+cd Chits-Exchanger/source/rpi/yolo
 ```
 
 ##### 4. Python Dependencies Installation
 ```bash
 # Install Python dependencies
-pip install --upgrade pip
-pip install -r requirements.txt
+pip3 install --upgrade pip
+pip3 install ultralytics
+pip3 install opencv-python
+pip3 install numpy
 
-# Install PyTorch with CUDA support (if using NVIDIA Jetson)
-# pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
+# Or install from requirements.txt
+pip3 install -r requirements.txt
 ```
 
 ##### 5. YOLOv11 Model Setup
 ```bash
-# Download pre-trained YOLOv11 model
-mkdir -p ai_detection/models
-cd ai_detection/models
+# Model already included in repository
+ls -lh yolo11n.pt
 
-# Download base YOLOv11 model
-wget https://github.com/ultralytics/assets/releases/download/v8.0.0/yolov8n.pt
+# Or download latest YOLOv11 nano model
+wget https://github.com/ultralytics/assets/releases/download/v0.0.0/yolo11n.pt
 
-# Note: Custom chit detection model needs to be trained separately
-# See training instructions in the AI section
+# Use custom trained model for best chit detection performance
+# Copy trained model from ml/training directory:
+cp ../../ml/training/train/weights/best.pt ./yolo11n_chit.pt
 ```
 
-##### 6. Hardware Configuration
+##### 6. Configure ESP32-CAM Stream URL
 ```bash
-# Configure camera permissions
-sudo usermod -a -G video $USER
+# Edit yolo_detect.py and update ESP32-CAM IP address
+nano yolo_detect.py
 
-# Setup USB-Serial adapters for ALLAN hoppers
-sudo chmod 666 /dev/ttyUSB*
+# Find and update this line with your ESP32-CAM IP:
+# img_source = 'http://192.168.1.21/stream'
 
-# Configure GPIO permissions
-sudo usermod -a -G gpio $USER
-
-# Setup audio system
-sudo apt install -y pulseaudio pavucontrol
+# Check ESP32-CAM serial monitor for actual IP address
 ```
 
-##### 7. Service Installation
+##### 7. Run YOLO Detection System
 ```bash
-# Create systemd service for auto-start
-sudo cp scripts/chitexchanger.service /etc/systemd/system/
-sudo systemctl enable chitexchanger.service
-sudo systemctl start chitexchanger.service
+# Basic detection with default confidence threshold (0.5)
+python3 yolo_detect.py --model yolo11n.pt --thresh 0.5
+
+# Use custom trained model for better chit detection
+python3 yolo_detect.py --model yolo11n_chit.pt --thresh 0.5
+
+# With custom resolution for display
+python3 yolo_detect.py --model yolo11n.pt --resolution 1280x720 --thresh 0.7
+
+# Enable video recording (requires resolution parameter)
+python3 yolo_detect.py --model yolo11n.pt --resolution 640x480 --record
+
+# High confidence threshold for production use
+python3 yolo_detect.py --model ../../ml/training/train/weights/best.pt --thresh 0.7
+```
+
+##### 8. Setup Auto-Start on Boot (Optional)
+```bash
+# Make start script executable
+chmod +x start.sh
+
+# Edit start.sh to set correct model path
+nano start.sh
+
+# Add to crontab for automatic startup
+crontab -e
+# Add this line:
+@reboot sleep 30 && cd /home/pi/Chits-Exchanger/source/rpi/yolo && ./start.sh
+
+# Or create systemd service
+sudo nano /etc/systemd/system/yolo-detector.service
+```
+
+**Systemd Service Example:**
+```ini
+[Unit]
+Description=YOLO Chit Detection Service
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/Chits-Exchanger/source/rpi/yolo
+ExecStart=/usr/bin/python3 yolo_detect.py --model yolo11n_chit.pt --thresh 0.5
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+# Enable and start service
+sudo systemctl enable yolo-detector.service
+sudo systemctl start yolo-detector.service
+sudo systemctl status yolo-detector.service
 ```
 
 #### 🔗 Network Configuration
@@ -2934,18 +3394,25 @@ DEACTIVATED    = 0    // No PWM signal
 PCA9685_ADDR = 0x40   // PWM Driver
 LCD_ADDR     = 0x27   // 20x4 LCD Display
 
-// Dispense Durations
-DISPENSE_DURATION_5  = 500   // ₱5 chits
-DISPENSE_DURATION_10 = 600   // ₱10 chits
-DISPENSE_DURATION_20 = 700   // ₱20 chits
-DISPENSE_DURATION_50 = 800   // ₱50 chits
+// Dispense Durations (All denominations use same timing)
+DISPENSE_DURATION_5  = 1050   // ₱5 chits
+DISPENSE_DURATION_10 = 1050   // ₱10 chits
+DISPENSE_DURATION_20 = 1050   // ₱20 chits
+DISPENSE_DURATION_50 = 1050   // ₱50 chits
+
+// GPIO Pin Assignments
+COIN_PIN    = 4    // Coin slot interrupt
+BILL_PIN    = 26   // Bill acceptor interrupt
+BUZZER_PIN  = 27   // Piezo buzzer output
 ```
 
 ### Quick Troubleshooting
-**Servos Don't Move**: Check external 5V power, verify I2C (0x40), check serial output  
-**Only One Servo Works**: Verify channel wiring, test servo power connection  
-**Weak Dispensing**: Increase duration, check 5V ±0.2V power supply  
-**Erratic Movement**: Ensure PWM=0 when idle, check for power noise, add 1000µF capacitor
+**Servos Don't Move**: Check external 5V/4A power, verify I2C (0x40), check serial output  
+**Only One Servo Works**: Verify channel wiring, test servo power connection individually  
+**Weak Dispensing**: Check 5V ±0.2V power supply, verify all 8 servos connected properly  
+**Erratic Movement**: Ensure PWM=0 when idle, check for power noise, add 1000µF capacitor  
+**Camera Not Streaming**: Check ESP32-CAM IP, verify WiFi connection, test stream URL in browser  
+**YOLO Low FPS**: Reduce resolution, lower confidence threshold, use model quantization
 
 ---
 
