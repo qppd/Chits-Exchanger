@@ -189,8 +189,8 @@ void dispenseCardPair(int channel1, int channel2, int chitValue) {
   Serial.print(channel2);
   Serial.println(" stopped");
   
-  // Small delay between operations
-  delay(100);
+  // Minimal buffer between operations to keep total per-card time ~1.2s
+  delay(150);
 }
 
 // ========================================

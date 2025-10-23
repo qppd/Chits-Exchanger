@@ -14,10 +14,11 @@ const int SERVO_FORWARD = 450;     // PWM value for forward rotation
 const int SERVO_BACKWARD = 300;    // PWM value for backward rotation
 
 // Timing variables for card dispensing (in milliseconds)
-const int DISPENSE_DURATION_5 = 500;   // Duration to dispense ₱5 chit (ms)
-const int DISPENSE_DURATION_10 = 600;  // Duration to dispense ₱10 chit (ms)
-const int DISPENSE_DURATION_20 = 700;  // Duration to dispense ₱20 chit (ms)
-const int DISPENSE_DURATION_50 = 800;  // Duration to dispense ₱50 chit (ms)
+// Set to achieve ~1.2 seconds per chit (including small inter-operation buffer)
+const int DISPENSE_DURATION_5 = 1050;   // Duration to dispense ₱5 chit (ms)
+const int DISPENSE_DURATION_10 = 1050;  // Duration to dispense ₱10 chit (ms)
+const int DISPENSE_DURATION_20 = 1050;  // Duration to dispense ₱20 chit (ms)
+const int DISPENSE_DURATION_50 = 1050;  // Duration to dispense ₱50 chit (ms)
 
 // Function declarations
 void scanI2CDevices(); // I2C device scanner for debugging

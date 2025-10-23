@@ -114,7 +114,8 @@ void dispenseChitType(int channel1, int channel2, int count, int chitValue) {
     dispenseCardPair(channel1, channel2, chitValue);
     
     playDispensingFeedback(chitValue, i + 1);
-    delay(300); // Short delay between dispensing individual chits
+    // Small delay to complete ~1.2s per chit including dispense duration (1050ms) and buffers
+    delay(150);
   }
 }
 
@@ -271,7 +272,8 @@ void loop() {
   }
   
   // Handle coin insertion
-  if (coinInserted && (millis() - lastCoinPulseTime > 300)) {
+  // 250ms timeout allows all pulses to be received (ALLAN COINSLOT has ~150-200ms pulse spacing)
+  if (coinInserted && (millis() - lastCoinPulseTime > 250)) {
     int coinValue = getCoinValue();
     if (coinValue > 0) {
       coinCredit += coinValue;
@@ -291,7 +293,7 @@ void loop() {
         snprintf(coinMsg, sizeof(coinMsg), "P%d | Total: P%dk", coinValue, billCredit/1000);
       }
       displayMessage(coinMsg, 1);
-      delay(1500);
+      delay(800);  // Reduced from 1500ms to 800ms for faster response
       
       // Check if we have enough credit to start dispensing
       if (billCredit >= 5) {
