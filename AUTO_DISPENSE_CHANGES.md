@@ -144,10 +144,17 @@ python3 yolo_detect.py \
 - I2C LCD display (optional)
 
 ## Baud Rates
-- **ChitExchanger ESP32:** 9600 baud
-- **CoinExchanger ESP32:** 115200 baud
+- **ChitExchanger ESP32:** 9600 baud (servo-based chit dispensing)
+- **CoinExchanger ESP32:** 115200 baud ✅ **ACTIVE** (coin hopper dispensing)
 
 Make sure you're using the correct baud rate for your ESP32 firmware!
+
+## Current Setup
+Based on your system:
+- **ESP32 Port:** `/dev/ttyUSB0` (was `/dev/ttyUSB1` earlier)
+- **Firmware:** CoinExchanger (115200 baud)
+- **Hardware:** 3 Coin Hoppers (5, 10, 20 peso) with pulse counting
+- **Communication:** Working! ESP32 responds to CHIT_DETECTED commands
 
 ## Troubleshooting
 
