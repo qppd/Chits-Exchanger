@@ -598,6 +598,16 @@ void handleRPiCommand(String command) {
       int chitValue = valueStr.toInt();
       
       if (chitValue == 5 || chitValue == 10 || chitValue == 20 || chitValue == 50) {
+        // Check if system is busy
+        if (currentState != STATE_IDLE && currentState != STATE_COMPLETE && currentState != STATE_ERROR) {
+          Serial.println("========================================");
+          Serial.println("⚠️  SYSTEM BUSY - Ignoring AUTO_DISPENSE");
+          Serial.print("Current state: ");
+          Serial.println(currentState);
+          Serial.println("========================================");
+          return;
+        }
+        
         Serial.println("========================================");
         Serial.print("🎯 AUTO_DISPENSE received: P");
         Serial.println(chitValue);

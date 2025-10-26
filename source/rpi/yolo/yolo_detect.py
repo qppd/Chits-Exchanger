@@ -197,8 +197,14 @@ if not pi.connected:
 
 # Initialize serial communication with ESP32
 try:
-    esp32_serial = serial.Serial(args.esp32_port, 115200, timeout=1)
+    # Use very short timeout to prevent blocking the main loop
+    esp32_serial = serial.Serial(args.esp32_port, 115200, timeout=0.01)
     time.sleep(2)  # Wait for serial connection to establish
+    
+    # Clear any buffered data that might cause issues
+    esp32_serial.reset_input_buffer()
+    esp32_serial.reset_output_buffer()
+    
     print(f"Serial connection to ESP32 established on {args.esp32_port}")
 except Exception as e:
     print(f"WARNING: Could not connect to ESP32 on {args.esp32_port}: {e}")
@@ -266,31 +272,37 @@ def send_to_esp32(message):
             print(f"Error sending to ESP32: {e}")
 
 def read_from_esp32():
-    """Read messages from ESP32 if available"""
+    """Read messages from ESP32 if available (non-blocking)"""
     if esp32_serial and esp32_serial.is_open:
         try:
+            # Check if data is available without blocking
             if esp32_serial.in_waiting > 0:
-                message = esp32_serial.readline().decode().strip()
+                # Read only available bytes, don't wait for newline
+                message = esp32_serial.readline().decode('utf-8', errors='ignore').strip()
                 
-                # Update LCD with ESP32 messages
-                if message.startswith("DISPENSING_COMPLETE"):
-                    lcd.display_lines(
-                        "ESP32:",
-                        "Dispensing",
-                        "Complete!",
-                        ""
-                    )
-                    time.sleep(2)
-                    lcd.display_lines(
-                        "Ready",
-                        "Waiting for chit...",
-                        "",
-                        ""
-                    )
-                
-                return message
-        except Exception as e:
+                # Only process non-empty messages
+                if message:
+                    # Update LCD with ESP32 messages
+                    if message.startswith("DISPENSING_COMPLETE"):
+                        lcd.display_lines(
+                            "ESP32:",
+                            "Dispensing",
+                            "Complete!",
+                            ""
+                        )
+                        time.sleep(2)
+                        lcd.display_lines(
+                            "Ready",
+                            "Waiting for chit...",
+                            "",
+                            ""
+                        )
+                    
+                    return message
+        except (serial.SerialException, UnicodeDecodeError) as e:
             print(f"Error reading from ESP32: {e}")
+        except Exception as e:
+            print(f"Unexpected error reading from ESP32: {e}")
     return None
 
 def is_ir_detected():
@@ -382,14 +394,8 @@ while True:
                 "Releasing chit..."
             )
             
-            # Send detection result to ESP32
-            send_to_esp32(f"CHIT_DETECTED:{detected_chit_value}")
-            
             # Release the chit
             release_chit()
-            
-            # Notify ESP32 that chit was released
-            send_to_esp32(f"CHIT_RELEASED:{detected_chit_value}")
             
             print(f"Chit ₱{detected_chit_value} released successfully")
             
