@@ -2,7 +2,7 @@ task: detect
 mode: train
 model: yolo11n.pt
 data: /content/data.yaml
-epochs: 2000
+epochs: 1000
 time: null
 patience: 100
 batch: 16

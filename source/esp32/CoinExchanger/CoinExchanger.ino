@@ -73,7 +73,7 @@ const int numDenominations = 3;
 int denominationIndex = 0;
 
 // Dispensing variables
-struct DispenseP lan {
+struct DispensePlan {
   int coins_5;
   int coins_10;
   int coins_20;
