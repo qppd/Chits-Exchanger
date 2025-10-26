@@ -11,6 +11,9 @@ import cv2
 import numpy as np
 from ultralytics import YOLO
 
+# Determine if GUI is available (e.g., from terminal or desktop session)
+use_gui = "DISPLAY" in os.environ
+
 # Define and parse user input arguments
 parser = argparse.ArgumentParser()
 parser.add_argument('--model', help='Path to YOLO model file (example: "runs/detect/train/weights/best.pt")',
@@ -330,16 +333,20 @@ while True:
             status_text = f'DETECTED: P{detected_chit_value} ({detection_confidence:.0%})'
         cv2.putText(frame, status_text, (10,80), cv2.FONT_HERSHEY_SIMPLEX, .7, (0,255,0), 2)
     
-    cv2.imshow('Chit Detection System', frame) # Display image
+    if use_gui:
+        cv2.imshow('Chit Detection System', frame) # Display image
     if record: recorder.write(frame)
 
     # Wait for key press (5ms timeout)
-    key = cv2.waitKey(5) & 0xFF
+    if use_gui:
+        key = cv2.waitKey(5) & 0xFF
+    else:
+        key = -1
     
     if key == ord('q') or key == ord('Q'): # Press 'q' to quit
         break
     elif key == ord('s') or key == ord('S'): # Press 's' to pause inference
-        cv2.waitKey()
+        if use_gui: cv2.waitKey()
     elif key == ord('p') or key == ord('P'): # Press 'p' to save a picture of results on this frame
         cv2.imwrite('capture.png',frame)
     
@@ -375,6 +382,7 @@ if esp32_serial and esp32_serial.is_open:
 
 cap.release()
 if record: recorder.release()
-cv2.destroyAllWindows()
+if use_gui:
+    cv2.destroyAllWindows()
 
 print("System shutdown complete.")
