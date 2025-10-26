@@ -590,8 +590,86 @@ bool handleTestCommand(String command) {
 void handleRPiCommand(String command) {
   command.trim();
   
+  // Handle AUTO_DISPENSE:value - Automatic dispensing trigger
+  if (command.startsWith("AUTO_DISPENSE:")) {
+    int colonIndex = command.indexOf(':');
+    if (colonIndex > 0) {
+      String valueStr = command.substring(colonIndex + 1);
+      int chitValue = valueStr.toInt();
+      
+      if (chitValue == 5 || chitValue == 10 || chitValue == 20 || chitValue == 50) {
+        Serial.println("========================================");
+        Serial.print("🎯 AUTO_DISPENSE received: P");
+        Serial.println(chitValue);
+        Serial.println("========================================");
+        
+        // Set the detected chit value
+        detectedChitValue = chitValue;
+        
+        // Set default denomination preference (5 peso coins)
+        selectedDenomination = 5;
+        
+        // Update LCD
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.print("AUTO DISPENSE!");
+        lcd.setCursor(0, 1);
+        lcd.print("Chit: P");
+        lcd.print(chitValue);
+        lcd.setCursor(0, 2);
+        lcd.print("Calculating...");
+        
+        delay(1000);
+        
+        // Calculate optimal coin combination
+        currentPlan = calculateCoinCombination(detectedChitValue, selectedDenomination);
+        
+        // Display plan
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.print("Dispensing Plan:");
+        lcd.setCursor(0, 1);
+        lcd.print("5P:");
+        lcd.print(currentPlan.coins_5);
+        lcd.print(" 10P:");
+        lcd.print(currentPlan.coins_10);
+        lcd.setCursor(0, 2);
+        lcd.print("20P:");
+        lcd.print(currentPlan.coins_20);
+        lcd.setCursor(0, 3);
+        lcd.print("Total: P");
+        lcd.print(currentPlan.totalValue);
+        
+        Serial.println("=== Auto Dispensing Plan ===");
+        Serial.print("5 PHP coins: ");
+        Serial.println(currentPlan.coins_5);
+        Serial.print("10 PHP coins: ");
+        Serial.println(currentPlan.coins_10);
+        Serial.print("20 PHP coins: ");
+        Serial.println(currentPlan.coins_20);
+        Serial.print("Total value: P");
+        Serial.println(currentPlan.totalValue);
+        
+        if (currentPlan.remainder > 0) {
+          Serial.print("⚠️  Remainder: P");
+          Serial.println(currentPlan.remainder);
+        }
+        
+        delay(2000);
+        
+        // Start dispensing immediately
+        currentState = STATE_DISPENSING;
+        dispensedCoins = 0;
+        
+        Serial.println("🚀 Starting automatic coin dispensing...");
+      } else {
+        Serial.print("❌ Invalid chit value: ");
+        Serial.println(chitValue);
+      }
+    }
+  }
   // Handle CHIT_DETECTED:value
-  if (command.startsWith(CMD_CHIT_DETECTED + ":")) {
+  else if (command.startsWith(CMD_CHIT_DETECTED + ":")) {
     int colonIndex = command.indexOf(':');
     if (colonIndex > 0) {
       String valueStr = command.substring(colonIndex + 1);

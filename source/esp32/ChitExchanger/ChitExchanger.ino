@@ -253,15 +253,43 @@ void loop() {
   if (Serial.available() > 0) {
     String command = Serial.readStringUntil('\n');
     command.trim();
-    command.toUpperCase();
     
-    if (command == "TEST") {
+    // Check for AUTO_DISPENSE command from RPi
+    if (command.startsWith("AUTO_DISPENSE:")) {
+      int colonIndex = command.indexOf(':');
+      int chitValue = command.substring(colonIndex + 1).toInt();
+      
+      Serial.print("Received AUTO_DISPENSE command for P");
+      Serial.println(chitValue);
+      
+      // Set billCredit to the detected chit value
+      billCredit = chitValue;
+      
+      // Update display
+      displayMessage("CHIT DETECTED!", 0);
+      char msg[21];
+      snprintf(msg, sizeof(msg), "Value: P%d", chitValue);
+      displayMessage(msg, 1);
+      delay(1000);
+      
+      // Trigger automatic dispensing
+      triggerAutoDispensing();
+      
+      // Reset credit after dispensing
+      billCredit = 0;
+    }
+    else if (command.toUpperCase() == "TEST") {
       Serial.println("Received TEST command - Testing ₱10 servo pair...");
       testAdditionalServos();
     }
-    else if (command == "TESTALL") {
+    else if (command.toUpperCase() == "TESTALL") {
       Serial.println("Received TESTALL command - Testing all servo pairs...");
       testAllServoPairs();
+    }
+    else {
+      // For backwards compatibility, also check for other commands
+      Serial.print("Unknown command: ");
+      Serial.println(command);
     }
   }
   

@@ -393,14 +393,18 @@ while True:
             
             print(f"Chit ₱{detected_chit_value} released successfully")
             
+            # Auto-dispense: Send command to ESP32 to dispense detected amount
+            print(f"AUTO-DISPENSING: Triggering dispense of ₱{detected_chit_value}")
+            send_to_esp32(f"AUTO_DISPENSE:{detected_chit_value}")
+            
             # Update LCD
             lcd.display_lines(
-                "SUCCESS!",
+                "AUTO DISPENSE!",
                 f"Chit: P{detected_chit_value}",
-                "Released",
-                "Sent to ESP32"
+                "Dispensing...",
+                "Please wait"
             )
-            time.sleep(2)
+            time.sleep(3)
         elif time.time() - detection_start_time > DETECTION_TIMEOUT:
             print("Detection timeout - no valid chit detected")
             send_to_esp32("DETECTION_TIMEOUT")
