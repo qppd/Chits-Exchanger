@@ -27,13 +27,13 @@ parser.add_argument('--record', help='Record results from video or webcam and sa
                     action='store_true')
 parser.add_argument('--esp32_port', help='Serial port for ESP32 communication (example: "/dev/ttyUSB0")',
                     default='/dev/ttyUSB0')
-parser.add_argument('--camera_ip', help='ESP32-CAM IP address',
-                    default='192.168.1.21')
+parser.add_argument('--camera', help='USB camera device ID (example: "0" for /dev/video0)',
+                    default='0')
 
 args = parser.parse_args()
 
-# ESP32-CAM HTTP stream URL
-img_source = f'http://{args.camera_ip}/stream'
+# USB camera device
+img_source = int(args.camera)
 
 # GPIO Pin Configurations for RPi
 IR_SENSOR_PIN = 17  # IR sensor input
@@ -61,9 +61,9 @@ if (not os.path.exists(model_path)):
 model = YOLO(model_path, task='detect')
 labels = model.names
 
-# Set source type to RTSP stream
-source_type = 'rtsp'
-print(f'Connecting to ESP32-CAM RTSP stream at: {img_source}')
+# Set source type to USB webcam
+source_type = 'usb'
+print(f'Using USB webcam at /dev/video{args.camera}')
 
 # Parse user-specified display resolution
 resize = False
@@ -156,7 +156,7 @@ def is_ir_detected():
 set_servo_angle(SERVO_INITIAL_ANGLE)
 print(f"Servo initialized to {SERVO_INITIAL_ANGLE}°")
 
-# Initialize RTSP stream connection
+# Initialize USB webcam connection
 cap = cv2.VideoCapture(img_source)
 
 # Set camera resolution if specified by user
@@ -166,10 +166,10 @@ if user_res:
 
 # Check if connection is successful
 if not cap.isOpened():
-    print(f"Failed to connect to ESP32-CAM stream at {img_source}")
+    print(f"Failed to open USB camera /dev/video{args.camera}")
     sys.exit(1)
 
-print("Successfully connected to ESP32-CAM stream")
+print("Successfully connected to USB webcam")
 
 # Set bounding box colors (using the Tableu 10 color scheme)
 bbox_colors = [(164,120,87), (68,148,228), (93,97,209), (178,182,133), (88,159,106), 
@@ -189,8 +189,8 @@ detection_confidence = 0.0
 detection_start_time = 0
 DETECTION_TIMEOUT = 10  # seconds
 
-# Begin YOLO detection using ESP32-CAM RTSP stream
-print("Connected to ESP32-CAM. Running detection...")
+# Begin YOLO detection using USB webcam
+print("Connected to USB webcam. Running detection...")
 print(f"IR Sensor on GPIO {IR_SENSOR_PIN}")
 print(f"Servo on GPIO {SERVO_PIN}")
 print("Waiting for IR sensor to detect chit...")
@@ -244,16 +244,11 @@ while True:
 
     t_start = time.perf_counter()
 
-    # Read frame from RTSP stream
+    # Read frame from USB webcam
     ret, frame = cap.read()
     if not ret or frame is None:
-        print('Unable to read frame from ESP32-CAM stream. Attempting to reconnect...')
-        cap.release()
-        cap = cv2.VideoCapture(img_source)
-        if not cap.isOpened():
-            print('Reconnection failed. Exiting program.')
-            break
-        continue
+        print('Unable to read frame from USB webcam. Exiting...')
+        break
 
     # Resize frame to desired display resolution
     if resize == True:
