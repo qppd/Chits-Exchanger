@@ -11,6 +11,119 @@ import cv2
 import numpy as np
 from ultralytics import YOLO
 
+# I2C LCD Support
+try:
+    import smbus2 as smbus
+    LCD_AVAILABLE = True
+except ImportError:
+    print("WARNING: smbus2 not available. LCD display will be disabled.")
+    print("Install with: pip install smbus2")
+    LCD_AVAILABLE = False
+
+# ===== LCD Configuration =====
+I2C_ADDR = 0x27  # I2C device address
+LCD_WIDTH = 20   # Maximum characters per line
+LCD_ROWS = 4     # Number of display lines
+
+# LCD Commands
+LCD_CHR = 1  # Mode - Sending data
+LCD_CMD = 0  # Mode - Sending command
+
+LCD_LINE_1 = 0x80  # LCD RAM address for the 1st line
+LCD_LINE_2 = 0xC0  # LCD RAM address for the 2nd line
+LCD_LINE_3 = 0x94  # LCD RAM address for the 3rd line
+LCD_LINE_4 = 0xD4  # LCD RAM address for the 4th line
+
+# Timing constants
+E_PULSE = 0.0005
+E_DELAY = 0.0005
+
+class LCD:
+    """I2C LCD Display Class for 20x4 character display"""
+    def __init__(self, addr=I2C_ADDR, bus=1):
+        """Initialize I2C bus and LCD"""
+        if not LCD_AVAILABLE:
+            self.enabled = False
+            return
+        
+        try:
+            self.bus = smbus.SMBus(bus)
+            self.addr = addr
+            self.enabled = True
+            
+            # Initialize display
+            self.lcd_byte(0x33, LCD_CMD)  # 110011 Initialize
+            self.lcd_byte(0x32, LCD_CMD)  # 110010 Initialize
+            self.lcd_byte(0x06, LCD_CMD)  # 000110 Cursor move direction
+            self.lcd_byte(0x0C, LCD_CMD)  # 001100 Display On, Cursor Off, Blink Off
+            self.lcd_byte(0x28, LCD_CMD)  # 101000 Data length, number of lines, font size
+            self.lcd_byte(0x01, LCD_CMD)  # 000001 Clear display
+            time.sleep(E_DELAY)
+            print(f"LCD initialized at address 0x{addr:02X}")
+        except Exception as e:
+            print(f"WARNING: Could not initialize LCD: {e}")
+            self.enabled = False
+
+    def lcd_byte(self, bits, mode):
+        """Send byte to data pins"""
+        if not self.enabled:
+            return
+        
+        try:
+            bits_high = mode | (bits & 0xF0) | 0x08
+            bits_low = mode | ((bits << 4) & 0xF0) | 0x08
+
+            # High bits
+            self.bus.write_byte(self.addr, bits_high)
+            self.lcd_toggle_enable(bits_high)
+
+            # Low bits
+            self.bus.write_byte(self.addr, bits_low)
+            self.lcd_toggle_enable(bits_low)
+        except:
+            pass
+
+    def lcd_toggle_enable(self, bits):
+        """Toggle enable"""
+        time.sleep(E_DELAY)
+        self.bus.write_byte(self.addr, (bits | 0x04))
+        time.sleep(E_PULSE)
+        self.bus.write_byte(self.addr, (bits & ~0x04))
+        time.sleep(E_DELAY)
+
+    def lcd_string(self, message, line):
+        """Send string to display"""
+        if not self.enabled:
+            return
+        
+        message = message.ljust(LCD_WIDTH, " ")
+        self.lcd_byte(line, LCD_CMD)
+
+        for i in range(min(LCD_WIDTH, len(message))):
+            self.lcd_byte(ord(message[i]), LCD_CHR)
+
+    def clear(self):
+        """Clear LCD display"""
+        if not self.enabled:
+            return
+        
+        self.lcd_byte(0x01, LCD_CMD)
+        time.sleep(E_DELAY)
+    
+    def display_lines(self, line1="", line2="", line3="", line4=""):
+        """Display multiple lines at once"""
+        if not self.enabled:
+            return
+        
+        if line1:
+            self.lcd_string(line1, LCD_LINE_1)
+        if line2:
+            self.lcd_string(line2, LCD_LINE_2)
+        if line3:
+            self.lcd_string(line3, LCD_LINE_3)
+        if line4:
+            self.lcd_string(line4, LCD_LINE_4)
+
 # Determine if GUI is available (e.g., from terminal or desktop session)
 use_gui = "DISPLAY" in os.environ
 
@@ -92,6 +205,20 @@ except Exception as e:
     print("Continuing without ESP32 serial communication...")
     esp32_serial = None
 
+# Initialize I2C LCD Display
+lcd = LCD()
+if lcd.enabled:
+    lcd.clear()
+    lcd.display_lines(
+        "Chit Detection",
+        "System Ready",
+        "Waiting for chit...",
+        ""
+    )
+    time.sleep(2)
+else:
+    print("LCD display not available - continuing without LCD")
+
 # Check if recording is valid and set up recording
 if record:
     if source_type not in ['video','usb']:
@@ -143,7 +270,25 @@ def read_from_esp32():
     if esp32_serial and esp32_serial.is_open:
         try:
             if esp32_serial.in_waiting > 0:
-                return esp32_serial.readline().decode().strip()
+                message = esp32_serial.readline().decode().strip()
+                
+                # Update LCD with ESP32 messages
+                if message.startswith("DISPENSING_COMPLETE"):
+                    lcd.display_lines(
+                        "ESP32:",
+                        "Dispensing",
+                        "Complete!",
+                        ""
+                    )
+                    time.sleep(2)
+                    lcd.display_lines(
+                        "Ready",
+                        "Waiting for chit...",
+                        "",
+                        ""
+                    )
+                
+                return message
         except Exception as e:
             print(f"Error reading from ESP32: {e}")
     return None
@@ -214,12 +359,28 @@ while True:
         detection_confidence = 0.0
         detection_start_time = time.time()
         send_to_esp32("IR_DETECTED")
+        
+        # Update LCD
+        lcd.display_lines(
+            "IR DETECTED!",
+            "Scanning chit...",
+            "Please wait...",
+            ""
+        )
     
     # Stop detection if IR sensor no longer detects or timeout
     if detection_active and (not ir_detected or (time.time() - detection_start_time > DETECTION_TIMEOUT)):
         if detected_chit_value:
             print(f"\n=== DETECTION COMPLETE ===")
             print(f"Detected: ₱{detected_chit_value} chit (confidence: {detection_confidence:.2%})")
+            
+            # Update LCD
+            lcd.display_lines(
+                "DETECTED!",
+                f"Value: P{detected_chit_value}",
+                f"Conf: {int(detection_confidence*100)}%",
+                "Releasing chit..."
+            )
             
             # Send detection result to ESP32
             send_to_esp32(f"CHIT_DETECTED:{detected_chit_value}")
@@ -231,14 +392,40 @@ while True:
             send_to_esp32(f"CHIT_RELEASED:{detected_chit_value}")
             
             print(f"Chit ₱{detected_chit_value} released successfully")
+            
+            # Update LCD
+            lcd.display_lines(
+                "SUCCESS!",
+                f"Chit: P{detected_chit_value}",
+                "Released",
+                "Sent to ESP32"
+            )
+            time.sleep(2)
         elif time.time() - detection_start_time > DETECTION_TIMEOUT:
             print("Detection timeout - no valid chit detected")
             send_to_esp32("DETECTION_TIMEOUT")
+            
+            # Update LCD
+            lcd.display_lines(
+                "TIMEOUT!",
+                "No valid chit",
+                "detected",
+                "Try again..."
+            )
+            time.sleep(2)
         
         detection_active = False
         detected_chit_value = None
         detection_confidence = 0.0
         print("Waiting for next chit...\n")
+        
+        # Reset LCD to waiting state
+        lcd.display_lines(
+            "Ready",
+            "Waiting for chit...",
+            "",
+            ""
+        )
     
     last_ir_state = ir_detected
 
@@ -305,6 +492,15 @@ while True:
                             detected_chit_value = chit_value
                             detection_confidence = conf
                             print(f"Detected: ₱{chit_value} chit with {conf:.2%} confidence")
+                            
+                            # Update LCD with current best detection
+                            elapsed = int(time.time() - detection_start_time)
+                            lcd.display_lines(
+                                "DETECTING...",
+                                f"Chit: P{chit_value}",
+                                f"Conf: {int(conf*100)}%",
+                                f"Time: {elapsed}s"
+                            )
                 except ValueError:
                     # Class name is not a number, skip
                     pass
@@ -364,6 +560,15 @@ while True:
 print(f'\nShutting down...')
 print(f'Average pipeline FPS: {avg_frame_rate:.2f}')
 
+# Update LCD
+lcd.display_lines(
+    "Shutting down...",
+    "",
+    "",
+    ""
+)
+time.sleep(1)
+
 # Clean up GPIO and servo
 set_servo_angle(SERVO_INITIAL_ANGLE)
 pi.set_servo_pulsewidth(SERVO_PIN, 0)  # Stop servo
@@ -374,6 +579,9 @@ GPIO.cleanup()
 if esp32_serial and esp32_serial.is_open:
     send_to_esp32("SYSTEM_SHUTDOWN")
     esp32_serial.close()
+
+# Clear LCD before exit
+lcd.clear()
 
 cap.release()
 if record: recorder.release()
