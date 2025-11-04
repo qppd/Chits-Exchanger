@@ -294,6 +294,12 @@ bool COIN_HOPPER::dispenseCoins(int numberOfCoins) {
     dispensingStartTime = millis();
     targetDispenseCount = numberOfCoins;
     
+    // Wait a bit to ensure any previous coin has fully exited the sensor
+    delay(200);
+    
+    // NOW capture the actual starting count (after any residual pulses)
+    initialCount = pulseCount;
+    
     // Dispense coins one by one with motor ON/OFF cycle
     int coinsDispensed = 0;
     
@@ -565,6 +571,12 @@ bool COIN_HOPPER::dispenseAmount(int amountInPesos) {
     
     isDispensing = true;
     dispensingStartTime = millis();
+    
+    // Wait a bit to ensure any previous coin has fully exited the sensor
+    delay(200);
+    
+    // NOW capture the actual starting count (after any residual pulses)
+    initialCount = pulseCount;
     
     // Dispense coins one by one with motor ON/OFF cycle
     int coinsDispensed = 0;
