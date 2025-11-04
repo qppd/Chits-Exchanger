@@ -187,15 +187,10 @@ void IRAM_ATTR COIN_HOPPER::pulseISR_Hopper3() {
 
 // Interrupt handler (called from ISR)
 void IRAM_ATTR COIN_HOPPER::handlePulseInterrupt() {
-    unsigned long currentTime = millis();
-    
-    // Debounce check - use full debounce time to prevent double-counting
-    if (currentTime - lastDebounceTime > DEBOUNCE_TIME_MS) {
-        pulseCount++;
-        lastPulseTime = currentTime;
-        lastDebounceTime = currentTime;
-        totalCoinsDetected++;
-    }
+    // No debounce needed - FALLING edge only triggers once when coin exits sensor
+    pulseCount++;
+    lastPulseTime = millis();
+    totalCoinsDetected++;
 }
 
 // Main update function
@@ -316,20 +311,17 @@ bool COIN_HOPPER::dispenseCoins(int numberOfCoins) {
             delay(10);
             update();
             
-            // Check if we got exactly ONE pulse
+            // Check if we got exactly ONE pulse (coin has exited sensor)
             if (pulseCount > coinStartCount) {
                 coinDetected = true;
                 coinsDispensed++;
                 Serial.print("✓ Coin ");
                 Serial.print(i + 1);
-                Serial.println(" detected!");
-                
-                // Wait a bit to ensure coin has fully passed the sensor
-                delay(100);
+                Serial.println(" detected and exited!");
             }
         }
         
-        // Turn OFF motor after coin is detected
+        // Turn OFF motor after coin has exited
         disableSSR();
         
         if (!coinDetected) {
@@ -546,23 +538,20 @@ bool COIN_HOPPER::dispenseAmount(int amountInPesos) {
             delay(10);
             update();
             
-            // Check if we got exactly ONE pulse
+            // Check if we got exactly ONE pulse (coin has exited sensor)
             if (pulseCount > coinStartCount) {
                 coinDetected = true;
                 coinsDispensed++;
                 dispensedAmount = coinsDispensed * coinValue;
                 Serial.print("✓ Coin ");
                 Serial.print(i + 1);
-                Serial.print(" detected! Total: ");
+                Serial.print(" detected and exited! Total: ");
                 Serial.print(dispensedAmount);
                 Serial.println(" PHP");
-                
-                // Wait a bit to ensure coin has fully passed the sensor
-                delay(100);
             }
         }
         
-        // Turn OFF motor after coin is detected
+        // Turn OFF motor after coin has exited
         disableSSR();
         
         if (!coinDetected) {
