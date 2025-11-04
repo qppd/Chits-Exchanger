@@ -310,12 +310,6 @@ bool COIN_HOPPER::dispenseCoins(int numberOfCoins) {
         // Turn ON motor for this coin
         enableSSR();
         
-        // Wait for motor to stabilize before counting pulses
-        delay(100);
-        
-        // Reset the start count AFTER motor stabilizes to ignore any startup noise
-        coinStartCount = pulseCount;
-        
         // Wait for ONE pulse (one coin detected)
         bool coinDetected = false;
         while (!coinDetected && (millis() - coinStartTime < 5000)) {
@@ -545,12 +539,6 @@ bool COIN_HOPPER::dispenseAmount(int amountInPesos) {
         
         // Turn ON motor for this coin
         enableSSR();
-        
-        // Wait for motor to stabilize before counting pulses
-        delay(100);
-        
-        // Reset the start count AFTER motor stabilizes to ignore any startup noise
-        coinStartCount = pulseCount;
         
         // Wait for ONE pulse (one coin detected)
         bool coinDetected = false;
