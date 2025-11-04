@@ -310,19 +310,28 @@ bool COIN_HOPPER::dispenseCoins(int numberOfCoins) {
         // Turn ON motor for this coin
         enableSSR();
         
+        // Wait for motor to stabilize before counting pulses
+        delay(100);
+        
+        // Reset the start count AFTER motor stabilizes to ignore any startup noise
+        coinStartCount = pulseCount;
+        
         // Wait for ONE pulse (one coin detected)
         bool coinDetected = false;
         while (!coinDetected && (millis() - coinStartTime < 5000)) {
             delay(10);
             update();
             
-            // Check if we got a pulse
+            // Check if we got exactly ONE pulse
             if (pulseCount > coinStartCount) {
                 coinDetected = true;
                 coinsDispensed++;
                 Serial.print("✓ Coin ");
                 Serial.print(i + 1);
                 Serial.println(" detected!");
+                
+                // Wait a bit to ensure coin has fully passed the sensor
+                delay(100);
             }
         }
         
@@ -335,8 +344,8 @@ bool COIN_HOPPER::dispenseCoins(int numberOfCoins) {
             break;
         }
         
-        // Small delay between coins
-        delay(200);
+        // Longer delay between coins to ensure complete separation
+        delay(300);
         
         // Check for overall timeout
         if (millis() - dispensingStartTime > DISPENSE_TIMEOUT_MS) {
@@ -537,13 +546,19 @@ bool COIN_HOPPER::dispenseAmount(int amountInPesos) {
         // Turn ON motor for this coin
         enableSSR();
         
+        // Wait for motor to stabilize before counting pulses
+        delay(100);
+        
+        // Reset the start count AFTER motor stabilizes to ignore any startup noise
+        coinStartCount = pulseCount;
+        
         // Wait for ONE pulse (one coin detected)
         bool coinDetected = false;
         while (!coinDetected && (millis() - coinStartTime < 5000)) {
             delay(10);
             update();
             
-            // Check if we got a pulse
+            // Check if we got exactly ONE pulse
             if (pulseCount > coinStartCount) {
                 coinDetected = true;
                 coinsDispensed++;
@@ -553,6 +568,9 @@ bool COIN_HOPPER::dispenseAmount(int amountInPesos) {
                 Serial.print(" detected! Total: ");
                 Serial.print(dispensedAmount);
                 Serial.println(" PHP");
+                
+                // Wait a bit to ensure coin has fully passed the sensor
+                delay(100);
             }
         }
         
@@ -565,8 +583,8 @@ bool COIN_HOPPER::dispenseAmount(int amountInPesos) {
             break;
         }
         
-        // Small delay between coins to ensure clean separation
-        delay(200);
+        // Longer delay between coins to ensure complete separation
+        delay(300);
         
         // Check for overall timeout
         if (millis() - dispensingStartTime > DISPENSE_TIMEOUT_MS) {
