@@ -18,15 +18,15 @@
 
 // ===== COIN HOPPER PIN DEFINITIONS =====
 
-// ALLAN Coin Hoppers - Pulse Detection Pins (3 hoppers)
-#define COIN_HOPPER_1_PULSE_PIN  19      // GPIO19 - Hopper 1 pulse signal
-#define COIN_HOPPER_2_PULSE_PIN  18      // GPIO18 - Hopper 2 pulse signal  
-#define COIN_HOPPER_3_PULSE_PIN  4       // GPIO4  - Hopper 3 pulse signal
+// ALLAN Coin Hoppers - Pulse Detection Pins (3 hoppers) // 4  for 5 peso, 19 for 10 peso, and 18 for 20 peso.  
+#define COIN_HOPPER_1_PULSE_PIN  4      // GPIO19 - Hopper 1 pulse signal
+#define COIN_HOPPER_2_PULSE_PIN  19      // GPIO18 - Hopper 2 pulse signal  
+#define COIN_HOPPER_3_PULSE_PIN  18      // GPIO4  - Hopper 3 pulse signal
 
 // ALLAN Coin Hoppers - Solid State Relay Control Pins (3 SSRs)
 #define COIN_HOPPER_1_SSR_PIN    26      // GPIO26 - Hopper 1 power control (SSR)
-#define COIN_HOPPER_2_SSR_PIN    25      // GPIO25 - Hopper 2 power control (SSR)
-#define COIN_HOPPER_3_SSR_PIN    33      // GPIO33 - Hopper 3 power control (SSR)
+#define COIN_HOPPER_2_SSR_PIN    33      // GPIO25 - Hopper 2 power control (SSR)
+#define COIN_HOPPER_3_SSR_PIN    25      // GPIO33 - Hopper 3 power control (SSR)
 
 // Legacy definition for backward compatibility
 #define COIN_HOPPER_PULSE_PIN    COIN_HOPPER_1_PULSE_PIN

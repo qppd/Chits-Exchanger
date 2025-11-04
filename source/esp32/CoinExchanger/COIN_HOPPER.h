@@ -19,7 +19,7 @@
 #include "SOLID_STATE_RELAY.h"
 
 // Coin hopper constants
-#define DEBOUNCE_TIME_MS 25          // Reduced debounce time for real-time counting
+#define DEBOUNCE_TIME_MS 50          // Reduced debounce time for real-time counting
 #define MAX_PULSE_RATE 20            // Maximum expected pulses per second
 #define DISPENSE_TIMEOUT_MS 30000    // Timeout for coin dispensing operation
 #define PULSE_RATE_WINDOW_MS 5000    // Window for calculating pulse rate

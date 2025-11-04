@@ -98,6 +98,8 @@ const String CMD_TEST_RELAY = "test_relay";
 const String CMD_TEST_ALL = "test_all";
 const String CMD_HELP = "help";
 const String CMD_TEST_CHIT = "test_chit";  // Simulate chit detection
+const String CMD_TEST_HOPPER = "test_hopper";  // Test individual hopper
+const String CMD_TEST_AUTO = "test_auto";  // Test auto-dispense
 
 // Button handling
 volatile bool buttonPressed = false;
@@ -173,8 +175,12 @@ void setup() {
   Serial.println("\nCommands from RPi:");
   Serial.println("  CHIT_DETECTED:<value>");
   Serial.println("\nTest commands:");
-  Serial.println("  test_chit 50  - Simulate 50 peso chit");
-  Serial.println("  help          - Show all commands");
+  Serial.println("  test_chit 50      - Simulate 50 peso chit");
+  Serial.println("  test_auto 20      - Test auto-dispense for 20 peso");
+  Serial.println("  test_hopper 1 3   - Dispense 3 coins from hopper 1");
+  Serial.println("  test_pulse 1      - Test pulse reading on hopper 1");
+  Serial.println("  test_relay 1 on   - Turn on relay for hopper 1");
+  Serial.println("  help              - Show all commands");
   Serial.println("====================\n");
 }
 
@@ -349,13 +355,12 @@ void handleDispensing() {
   Serial.println("\n=== Starting Dispensing ===");
   
   COIN_HOPPER* hoppers[] = {&coinHopper1, &coinHopper2, &coinHopper3};
-  int coinsToDispense[] = {currentPlan.coins_20, currentPlan.coins_10, currentPlan.coins_5};
-  String denomNames[] = {"20 PHP", "10 PHP", "5 PHP"};
-  int hopperOrder[] = {2, 1, 0};  // Dispense 20, then 10, then 5
+  int coinsToDispense[] = {currentPlan.coins_5, currentPlan.coins_10, currentPlan.coins_20};
+  String denomNames[] = {"5 PHP", "10 PHP", "20 PHP"};
+  int denomValues[] = {5, 10, 20};
   
-  // Dispense from each hopper
+  // Dispense from each hopper in order: 5, 10, 20
   for (int i = 0; i < 3; i++) {
-    int hopperIdx = hopperOrder[i];
     int coinsNeeded = coinsToDispense[i];
     
     if (coinsNeeded > 0) {
@@ -370,38 +375,59 @@ void handleDispensing() {
       Serial.print(coinsNeeded);
       Serial.print(" x ");
       Serial.print(denomNames[i]);
-      Serial.println(" coins...");
+      Serial.print(" coins from Hopper ");
+      Serial.println(i + 1);
       
       // Reset counter for this hopper
-      unsigned long startCount = hoppers[hopperIdx]->getTotalCoins();
+      unsigned long startCount = hoppers[i]->getTotalCoins();
       
-      // Start dispensing
-      hoppers[hopperIdx]->dispenseCoins(coinsNeeded);
+      // Turn ON SSR relay for this hopper
+      Serial.print("Enabling SSR for Hopper ");
+      Serial.print(i + 1);
+      Serial.print(" (GPIO");
+      Serial.print(hoppers[i]->getSSRPin());
+      Serial.println(")");
+      hoppers[i]->enableSSR();
+      delay(100);  // Small delay for relay to activate
+      
+      // Start dispensing by amount (coins * value)
+      int amountToDispense = coinsNeeded * denomValues[i];
+      hoppers[i]->dispenseAmount(amountToDispense);
       
       // Monitor dispensing progress
       unsigned long targetCount = startCount + coinsNeeded;
       unsigned long timeout = millis() + 30000;  // 30 second timeout
       
-      while (hoppers[hopperIdx]->getTotalCoins() < targetCount && millis() < timeout) {
-        hoppers[hopperIdx]->update();
+      while (hoppers[i]->getTotalCoins() < targetCount && millis() < timeout) {
+        hoppers[i]->update();
         
-        unsigned long currentCount = hoppers[hopperIdx]->getTotalCoins();
+        unsigned long currentCount = hoppers[i]->getTotalCoins();
         int dispensed = currentCount - startCount;
         
         // Update LCD
         lcd.setCursor(7, 2);
         lcd.print(dispensed);
+        lcd.print(" ");  // Clear extra chars
         
         delay(50);
       }
       
-      unsigned long finalCount = hoppers[hopperIdx]->getTotalCoins();
+      // Turn OFF SSR relay for this hopper
+      Serial.print("Disabling SSR for Hopper ");
+      Serial.println(i + 1);
+      hoppers[i]->disableSSR();
+      
+      unsigned long finalCount = hoppers[i]->getTotalCoins();
       int actuallyDispensed = finalCount - startCount;
       
       Serial.print("Dispensed: ");
       Serial.print(actuallyDispensed);
       Serial.print("/");
-      Serial.println(coinsNeeded);
+      Serial.print(coinsNeeded);
+      Serial.print(" coins (");
+      Serial.print(actuallyDispensed * denomValues[i]);
+      Serial.print(" PHP)");
+      Serial.println();
       
       if (actuallyDispensed < coinsNeeded) {
         Serial.println("WARNING: Dispensing incomplete!");
@@ -483,30 +509,50 @@ void handleError() {
   lcd.print("Waiting for chit...");
 }
 
-// Calculate coin combination based on ChitExchanger algorithm
+// Calculate coin combination based on auto-dispense logic
+// Map chit values to hoppers:
+// - 5 PHP chit -> Hopper 1 (5 peso coins): 1 coin
+// - 10 PHP chit -> Hopper 2 (10 peso coins): 1 coin  
+// - 20 PHP chit -> Hopper 3 (20 peso coins): 1 coin
+// - 50 PHP chit -> Hopper 3 (20 peso coins): 2 coins + 10 peso: 1 coin (remainder calculated)
 DispensePlan calculateCoinCombination(int chitValue, int preferredDenom) {
   DispensePlan plan = {0, 0, 0, 0, 0, 0};
   
   int remaining = chitValue;
   
-  // Algorithm similar to ChitExchanger.ino's calculateOptimalChits
-  // Prioritize preferred denomination, then fill with others
-  
-  if (preferredDenom == 20) {
+  // Optimal dispensing strategy based on chit value
+  if (chitValue == 5) {
+    // 5 PHP: Use Hopper 1 (5 peso coins)
+    plan.coins_5 = 1;
+    remaining = 0;
+  } 
+  else if (chitValue == 10) {
+    // 10 PHP: Use Hopper 2 (10 peso coins)
+    plan.coins_10 = 1;
+    remaining = 0;
+  } 
+  else if (chitValue == 20) {
+    // 20 PHP: Use Hopper 3 (20 peso coins)
+    plan.coins_20 = 1;
+    remaining = 0;
+  } 
+  else if (chitValue == 50) {
+    // 50 PHP: Use Hopper 3 (20 peso) x2 + Hopper 2 (10 peso) x1
+    plan.coins_20 = 2;  // 40 PHP
+    plan.coins_10 = 1;  // 10 PHP
+    remaining = 0;
+  }
+  else {
+    // For other amounts, use greedy algorithm (largest denomination first)
+    // Start with 20 peso coins
     plan.coins_20 = remaining / 20;
     remaining %= 20;
+    
+    // Then 10 peso coins
     plan.coins_10 = remaining / 10;
     remaining %= 10;
-    plan.coins_5 = remaining / 5;
-    remaining %= 5;
-  } else if (preferredDenom == 10) {
-    plan.coins_10 = remaining / 10;
-    remaining %= 10;
-    plan.coins_20 = remaining / 20;
-    remaining %= 20;
-    plan.coins_5 = remaining / 5;
-    remaining %= 5;
-  } else {  // preferredDenom == 5
+    
+    // Finally 5 peso coins
     plan.coins_5 = remaining / 5;
     remaining %= 5;
   }
@@ -560,6 +606,33 @@ bool handleTestCommand(String command) {
       testRelayControl(hopperId, state);
     } else {
       Serial.println("Usage: test_relay 1/2/3 on/off");
+    }
+    return true;
+  }
+  else if (command.startsWith("test_hopper")) {
+    // test_hopper 1 5 - dispense 5 coins from hopper 1
+    int firstSpace = command.indexOf(' ');
+    int secondSpace = command.indexOf(' ', firstSpace + 1);
+    
+    if (firstSpace > 0 && secondSpace > 0) {
+      int hopperId = command.substring(firstSpace + 1, secondSpace).toInt();
+      int numCoins = command.substring(secondSpace + 1).toInt();
+      testHopperDispense(hopperId, numCoins);
+    } else {
+      Serial.println("Usage: test_hopper 1/2/3 <num_coins>");
+      Serial.println("Example: test_hopper 1 5");
+    }
+    return true;
+  }
+  else if (command.startsWith("test_auto")) {
+    // test_auto 50 - test auto-dispense for 50 peso
+    int spaceIndex = command.indexOf(' ');
+    if (spaceIndex > 0) {
+      int chitValue = command.substring(spaceIndex + 1).toInt();
+      testAutoDispense(chitValue);
+    } else {
+      Serial.println("Usage: test_auto <value>");
+      Serial.println("Example: test_auto 50");
     }
     return true;
   }
@@ -1167,41 +1240,266 @@ void testChitDetection(int chitValue) {
   Serial.println("Press button to cycle denominations and confirm");
 }
 
+// Test individual hopper dispensing with pulse reading
+void testHopperDispense(int hopperId, int numCoins) {
+  if (hopperId < 1 || hopperId > 3) {
+    Serial.println("❌ Invalid hopper ID. Use 1, 2, or 3");
+    return;
+  }
+  
+  if (numCoins <= 0 || numCoins > 20) {
+    Serial.println("❌ Invalid number of coins. Use 1-20");
+    return;
+  }
+  
+  COIN_HOPPER* hoppers[] = {&coinHopper1, &coinHopper2, &coinHopper3};
+  COIN_HOPPER* hopper = hoppers[hopperId - 1];
+  int coinValues[] = {5, 10, 20};
+  int coinValue = coinValues[hopperId - 1];
+  
+  Serial.println("\n=== HOPPER DISPENSING TEST ===");
+  Serial.print("Hopper: ");
+  Serial.println(hopperId);
+  Serial.print("Coin Value: ");
+  Serial.print(coinValue);
+  Serial.println(" PHP");
+  Serial.print("Coins to Dispense: ");
+  Serial.println(numCoins);
+  Serial.print("Total Amount: ");
+  Serial.print(numCoins * coinValue);
+  Serial.println(" PHP");
+  Serial.print("Pulse GPIO: ");
+  Serial.println(hopper->getPulsePin());
+  Serial.print("SSR GPIO: ");
+  Serial.println(hopper->getSSRPin());
+  Serial.println("==============================");
+  
+  unsigned long startCount = hopper->getTotalCoins();
+  
+  // Turn ON SSR
+  Serial.println("🟢 Turning ON SSR relay...");
+  hopper->enableSSR();
+  delay(500);  // Wait for relay to activate and motor to start
+  
+  Serial.println("🪙 Starting coin dispensing...");
+  Serial.println("Watching for pulses (30 second timeout)...");
+  
+  // Dispense by amount
+  int amountToDispense = numCoins * coinValue;
+  hopper->dispenseAmount(amountToDispense);
+  
+  // Monitor progress
+  unsigned long targetCount = startCount + numCoins;
+  unsigned long testStart = millis();
+  unsigned long lastUpdateTime = 0;
+  
+  while (hopper->getTotalCoins() < targetCount && (millis() - testStart) < 30000) {
+    hopper->update();
+    
+    unsigned long currentCount = hopper->getTotalCoins();
+    int dispensed = currentCount - startCount;
+    
+    // Print update every 500ms
+    if (millis() - lastUpdateTime > 500) {
+      Serial.print("Progress: ");
+      Serial.print(dispensed);
+      Serial.print("/");
+      Serial.print(numCoins);
+      Serial.print(" coins (");
+      Serial.print(dispensed * coinValue);
+      Serial.print("/");
+      Serial.print(numCoins * coinValue);
+      Serial.print(" PHP) | Rate: ");
+      Serial.print(hopper->getPulseRate(), 2);
+      Serial.println(" coins/sec");
+      lastUpdateTime = millis();
+    }
+    
+    delay(50);
+  }
+  
+  // Turn OFF SSR
+  Serial.println("🔴 Turning OFF SSR relay...");
+  hopper->disableSSR();
+  
+  // Final results
+  unsigned long finalCount = hopper->getTotalCoins();
+  int actualDispensed = finalCount - startCount;
+  int actualAmount = actualDispensed * coinValue;
+  unsigned long totalTime = millis() - testStart;
+  
+  Serial.println("\n📊 TEST RESULTS:");
+  Serial.print("  Target Coins: ");
+  Serial.println(numCoins);
+  Serial.print("  Dispensed Coins: ");
+  Serial.println(actualDispensed);
+  Serial.print("  Target Amount: ");
+  Serial.print(numCoins * coinValue);
+  Serial.println(" PHP");
+  Serial.print("  Dispensed Amount: ");
+  Serial.print(actualAmount);
+  Serial.println(" PHP");
+  Serial.print("  Total Count: ");
+  Serial.println(finalCount);
+  Serial.print("  Pulse Rate: ");
+  Serial.print(hopper->getPulseRate(), 2);
+  Serial.println(" coins/sec");
+  Serial.print("  Time: ");
+  Serial.print(totalTime / 1000.0, 2);
+  Serial.println(" seconds");
+  
+  if (actualDispensed == numCoins) {
+    Serial.println("✅ TEST PASSED!");
+  } else {
+    Serial.println("❌ TEST FAILED - Coin count mismatch!");
+  }
+  Serial.println("==============================\n");
+}
+
+// Test auto-dispense logic (simulates AUTO_DISPENSE command)
+void testAutoDispense(int chitValue) {
+  if (chitValue != 5 && chitValue != 10 && chitValue != 20 && chitValue != 50) {
+    Serial.println("❌ Invalid chit value. Use 5, 10, 20, or 50");
+    return;
+  }
+  
+  // Check if system is busy
+  if (currentState != STATE_IDLE && currentState != STATE_COMPLETE && currentState != STATE_ERROR) {
+    Serial.println("========================================");
+    Serial.println("⚠️  SYSTEM BUSY - Cannot test auto-dispense");
+    Serial.print("Current state: ");
+    Serial.println(currentState);
+    Serial.println("========================================");
+    return;
+  }
+  
+  Serial.println("\n========================================");
+  Serial.println("🧪 AUTO-DISPENSE TEST");
+  Serial.print("Simulating detection of P");
+  Serial.print(chitValue);
+  Serial.println(" chit");
+  Serial.println("========================================");
+  
+  // Set the detected chit value
+  detectedChitValue = chitValue;
+  selectedDenomination = 5;  // Default to 5 peso coins
+  
+  // Update LCD
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("TEST AUTO DISPENSE");
+  lcd.setCursor(0, 1);
+  lcd.print("Chit: P");
+  lcd.print(chitValue);
+  lcd.setCursor(0, 2);
+  lcd.print("Calculating...");
+  
+  delay(1000);
+  
+  // Calculate optimal coin combination
+  currentPlan = calculateCoinCombination(detectedChitValue, selectedDenomination);
+  
+  // Display plan
+  Serial.println("=== Dispensing Plan ===");
+  Serial.print("5 PHP coins: ");
+  Serial.print(currentPlan.coins_5);
+  Serial.print(" (");
+  Serial.print(currentPlan.coins_5 * 5);
+  Serial.println(" PHP)");
+  Serial.print("10 PHP coins: ");
+  Serial.print(currentPlan.coins_10);
+  Serial.print(" (");
+  Serial.print(currentPlan.coins_10 * 10);
+  Serial.println(" PHP)");
+  Serial.print("20 PHP coins: ");
+  Serial.print(currentPlan.coins_20);
+  Serial.print(" (");
+  Serial.print(currentPlan.coins_20 * 20);
+  Serial.println(" PHP)");
+  Serial.print("Total value: P");
+  Serial.println(currentPlan.totalValue);
+  
+  if (currentPlan.remainder > 0) {
+    Serial.print("⚠️  Remainder: P");
+    Serial.println(currentPlan.remainder);
+  }
+  Serial.println("======================");
+  
+  // Display on LCD
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Dispensing Plan:");
+  lcd.setCursor(0, 1);
+  lcd.print("5P:");
+  lcd.print(currentPlan.coins_5);
+  lcd.print(" 10P:");
+  lcd.print(currentPlan.coins_10);
+  lcd.setCursor(0, 2);
+  lcd.print("20P:");
+  lcd.print(currentPlan.coins_20);
+  lcd.setCursor(0, 3);
+  lcd.print("Total: P");
+  lcd.print(currentPlan.totalValue);
+  
+  delay(3000);
+  
+  // Start dispensing
+  currentState = STATE_DISPENSING;
+  dispensedCoins = 0;
+  
+  Serial.println("🚀 Starting automatic coin dispensing test...");
+  Serial.println("Press Ctrl+C to abort if needed\n");
+}
+
 void showTestHelp() {
   Serial.println("\n=== COIN EXCHANGER HELP ===");
   Serial.println();
   Serial.println("🪙 SYSTEM WORKFLOW:");
   Serial.println("  1. RPi detects chit with IR + YOLO");
-  Serial.println("  2. RPi sends CHIT_DETECTED:<value> to ESP32");
-  Serial.println("  3. ESP32 shows denomination selection on LCD");
-  Serial.println("  4. User presses button to cycle & confirm");
-  Serial.println("  5. ESP32 dispenses coins via 3 hoppers");
-  Serial.println("  6. Coins counted via pulse detection");
+  Serial.println("  2. RPi sends AUTO_DISPENSE:<value> to ESP32");
+  Serial.println("  3. ESP32 calculates optimal coin combination");
+  Serial.println("  4. ESP32 enables SSR and dispenses coins");
+  Serial.println("  5. Coins counted via pulse detection");
+  Serial.println("  6. SSR disabled after dispensing");
   Serial.println();
   Serial.println("🧪 TEST COMMANDS:");
-  Serial.println("  test_chit 50    - Simulate 50 peso chit detection");
-  Serial.println("  test_pulse 1/2/3- Test pulse detection");
-  Serial.println("  test_relay 1/2/3 on/off - Test SSR relays");
-  Serial.println("  test_all        - Test all components");
-  Serial.println("  help            - Show this help");
+  Serial.println("  test_auto 50        - Test auto-dispense for 50 peso");
+  Serial.println("  test_hopper 1 5     - Dispense 5 coins from hopper 1");
+  Serial.println("  test_pulse 1        - Test pulse detection on hopper 1");
+  Serial.println("  test_relay 1 on/off - Test SSR relay for hopper 1");
+  Serial.println("  test_all            - Test all components");
+  Serial.println("  test_chit 50        - Simulate manual chit detection");
+  Serial.println("  help                - Show this help");
   Serial.println();
-  Serial.println("� RPi COMMANDS:");
-  Serial.println("  CHIT_DETECTED:<value> - Trigger chit processing");
-  Serial.println("    Example: CHIT_DETECTED:50");
-  Serial.println("  IR_DETECTED     - IR sensor activated");
-  Serial.println("  CHIT_RELEASED:<value> - Chit dispensed by servo");
+  Serial.println("📌 RPi COMMANDS:");
+  Serial.println("  AUTO_DISPENSE:<value> - Auto dispense for detected chit");
+  Serial.println("    Example: AUTO_DISPENSE:50");
+  Serial.println("  CHIT_DETECTED:<value> - Manual chit processing");
+  Serial.println("  IR_DETECTED           - IR sensor activated");
+  Serial.println();
+  Serial.println("🎯 HOPPER MAPPING:");
+  Serial.println("  5 PHP chit  -> Hopper 1 (5 peso): 1 coin");
+  Serial.println("  10 PHP chit -> Hopper 2 (10 peso): 1 coin");
+  Serial.println("  20 PHP chit -> Hopper 3 (20 peso): 1 coin");
+  Serial.println("  50 PHP chit -> Hopper 3 (20 peso): 2 coins");
+  Serial.println("                 Hopper 2 (10 peso): 1 coin");
   Serial.println();
   Serial.println("💡 HARDWARE:");
   Serial.println("  Button: GPIO27 (cycles denominations)");
   Serial.println("  LCD: I2C 0x27 (20x4)");
-  Serial.println("  Hopper 1: GPIO19 + GPIO26 SSR (5 PHP)");
-  Serial.println("  Hopper 2: GPIO18 + GPIO25 SSR (10 PHP)");
-  Serial.println("  Hopper 3: GPIO4 + GPIO33 SSR (20 PHP)");
+  Serial.println("  Hopper 1: GPIO4 pulse + GPIO26 SSR (5 PHP)");
+  Serial.println("  Hopper 2: GPIO18 pulse + GPIO25 SSR (10 PHP)");
+  Serial.println("  Hopper 3: GPIO19 pulse + GPIO33 SSR (20 PHP)");
   Serial.println();
-  Serial.println("🎯 EXAMPLE:");
-  Serial.println("  1. Type: test_chit 50");
-  Serial.println("  2. Press button to cycle: 5, 10, 20");
-  Serial.println("  3. Press again to confirm selection");
-  Serial.println("  4. System calculates & dispenses coins");
+  Serial.println("📖 EXAMPLES:");
+  Serial.println("  Test single hopper:");
+  Serial.println("    > test_hopper 1 3");
+  Serial.println("  ");
+  Serial.println("  Test auto-dispense:");
+  Serial.println("    > test_auto 50");
+  Serial.println("  ");
+  Serial.println("  Test pulse reading:");
+  Serial.println("    > test_pulse 2");
+  Serial.println("    (Drop coins manually, watch for pulses)");
   Serial.println("===========================\n");
 }

@@ -197,18 +197,42 @@ if not pi.connected:
 
 # Initialize serial communication with ESP32
 try:
-    # Use very short timeout to prevent blocking the main loop
-    esp32_serial = serial.Serial(args.esp32_port, 115200, timeout=0.01)
-    time.sleep(2)  # Wait for serial connection to establish
+    print(f"Initializing serial connection to ESP32 on {args.esp32_port}...")
     
-    # Clear any buffered data that might cause issues
+    # Open serial port with proper settings
+    esp32_serial = serial.Serial(
+        port=args.esp32_port,
+        baudrate=115200,
+        timeout=0.01,  # Very short timeout for non-blocking reads
+        write_timeout=1.0,  # 1 second write timeout
+        bytesize=serial.EIGHTBITS,
+        parity=serial.PARITY_NONE,
+        stopbits=serial.STOPBITS_ONE
+    )
+    
+    # Wait for connection to stabilize
+    time.sleep(2)
+    
+    # Clear any buffered data from initialization
     esp32_serial.reset_input_buffer()
     esp32_serial.reset_output_buffer()
     
-    print(f"Serial connection to ESP32 established on {args.esp32_port}")
+    print(f"✅ Serial connection to ESP32 established successfully")
+    print(f"   Port: {args.esp32_port}")
+    print(f"   Baud: 115200")
+    print(f"   Mode: Non-blocking")
+    
+except serial.SerialException as e:
+    print(f"❌ Serial connection failed: {e}")
+    print(f"   Please check:")
+    print(f"   1. ESP32 is connected to {args.esp32_port}")
+    print(f"   2. User has permissions (run: sudo usermod -a -G dialout $USER)")
+    print(f"   3. No other program is using the port")
+    print("⚠️  Continuing without ESP32 serial communication...")
+    esp32_serial = None
 except Exception as e:
-    print(f"WARNING: Could not connect to ESP32 on {args.esp32_port}: {e}")
-    print("Continuing without ESP32 serial communication...")
+    print(f"❌ Unexpected error initializing serial: {e}")
+    print("⚠️  Continuing without ESP32 serial communication...")
     esp32_serial = None
 
 # Initialize I2C LCD Display
@@ -262,28 +286,45 @@ def release_chit():
     set_servo_angle(SERVO_INITIAL_ANGLE)
 
 def send_to_esp32(message):
-    """Send message to ESP32 via serial"""
+    """Send message to ESP32 via serial with proper formatting and error handling"""
     if esp32_serial and esp32_serial.is_open:
         try:
-            esp32_serial.write((message + '\n').encode())
-            esp32_serial.flush()
-            print(f"Sent to ESP32: {message}")
+            # Clear any pending output first
+            esp32_serial.reset_output_buffer()
+            
+            # Send message with newline terminator
+            full_message = message + '\n'
+            esp32_serial.write(full_message.encode('utf-8'))
+            esp32_serial.flush()  # Ensure data is sent immediately
+            
+            print(f"✅ Sent to ESP32: {message}")
+            return True
+        except serial.SerialException as e:
+            print(f"❌ Serial error sending to ESP32: {e}")
+            return False
         except Exception as e:
-            print(f"Error sending to ESP32: {e}")
+            print(f"❌ Error sending to ESP32: {e}")
+            return False
+    else:
+        print(f"⚠️  Cannot send '{message}' - Serial not connected")
+        return False
 
 def read_from_esp32():
-    """Read messages from ESP32 if available (non-blocking)"""
+    """Read messages from ESP32 if available (non-blocking) with proper error handling"""
     if esp32_serial and esp32_serial.is_open:
         try:
             # Check if data is available without blocking
             if esp32_serial.in_waiting > 0:
-                # Read only available bytes, don't wait for newline
+                # Read line with timeout protection
                 message = esp32_serial.readline().decode('utf-8', errors='ignore').strip()
                 
                 # Only process non-empty messages
                 if message:
-                    # Update LCD with ESP32 messages
+                    # Filter out debug messages (keep only important ones)
                     if message.startswith("DISPENSING_COMPLETE"):
+                        print(f"📨 ESP32: {message}")
+                        
+                        # Update LCD with completion message
                         lcd.display_lines(
                             "ESP32:",
                             "Dispensing",
@@ -297,12 +338,20 @@ def read_from_esp32():
                             "",
                             ""
                         )
+                    elif message.startswith("✅") or message.startswith("❌") or message.startswith("⚠️"):
+                        # Important status messages
+                        print(f"📨 ESP32: {message}")
+                    elif "AUTO_DISPENSE" in message or "SYSTEM BUSY" in message:
+                        # Important operational messages
+                        print(f"📨 ESP32: {message}")
                     
                     return message
-        except (serial.SerialException, UnicodeDecodeError) as e:
-            print(f"Error reading from ESP32: {e}")
+        except serial.SerialException as e:
+            print(f"❌ Serial exception reading from ESP32: {e}")
+        except UnicodeDecodeError as e:
+            print(f"⚠️  Decode error reading from ESP32: {e}")
         except Exception as e:
-            print(f"Unexpected error reading from ESP32: {e}")
+            print(f"❌ Unexpected error reading from ESP32: {e}")
     return None
 
 def is_ir_detected():
@@ -365,11 +414,18 @@ while True:
     
     # Start detection when IR sensor is triggered
     if ir_detected and not last_ir_state:
-        print("\n=== IR SENSOR DETECTED CHIT ===")
+        print(f"\n{'='*60}")
+        print(f"🔍 IR SENSOR TRIGGERED - CHIT DETECTED")
+        print(f"{'='*60}")
+        print(f"   Starting YOLO detection...")
+        print(f"   Timeout: {DETECTION_TIMEOUT} seconds")
+        print(f"{'='*60}\n")
+        
         detection_active = True
         detected_chit_value = None
         detection_confidence = 0.0
         detection_start_time = time.time()
+        
         send_to_esp32("IR_DETECTED")
         
         # Update LCD
@@ -383,8 +439,13 @@ while True:
     # Stop detection if IR sensor no longer detects or timeout
     if detection_active and (not ir_detected or (time.time() - detection_start_time > DETECTION_TIMEOUT)):
         if detected_chit_value:
-            print(f"\n=== DETECTION COMPLETE ===")
-            print(f"Detected: ₱{detected_chit_value} chit (confidence: {detection_confidence:.2%})")
+            print(f"\n{'='*60}")
+            print(f"🎉 DETECTION COMPLETE")
+            print(f"{'='*60}")
+            print(f"   Detected Value: ₱{detected_chit_value}")
+            print(f"   Confidence: {detection_confidence:.2%}")
+            print(f"   Detection Time: {time.time() - detection_start_time:.2f}s")
+            print(f"{'='*60}")
             
             # Update LCD
             lcd.display_lines(
@@ -395,24 +456,57 @@ while True:
             )
             
             # Release the chit
+            print(f"🔓 Releasing chit via servo...")
             release_chit()
-            
-            print(f"Chit ₱{detected_chit_value} released successfully")
+            print(f"✅ Chit ₱{detected_chit_value} released successfully")
             
             # Auto-dispense: Send command to ESP32 to dispense detected amount
-            print(f"AUTO-DISPENSING: Triggering dispense of ₱{detected_chit_value}")
-            send_to_esp32(f"AUTO_DISPENSE:{detected_chit_value}")
+            print(f"\n{'='*60}")
+            print(f"🪙 AUTO-DISPENSING TRIGGERED")
+            print(f"{'='*60}")
+            print(f"   Sending to ESP32: AUTO_DISPENSE:{detected_chit_value}")
+            print(f"   Expected dispensing:")
             
-            # Update LCD
-            lcd.display_lines(
-                "AUTO DISPENSE!",
-                f"Chit: P{detected_chit_value}",
-                "Dispensing...",
-                "Please wait"
-            )
-            time.sleep(3)
+            # Show expected coin breakdown
+            if detected_chit_value == 5:
+                print(f"     - 1 x 5 PHP coin (Hopper 1)")
+            elif detected_chit_value == 10:
+                print(f"     - 1 x 10 PHP coin (Hopper 2)")
+            elif detected_chit_value == 20:
+                print(f"     - 1 x 20 PHP coin (Hopper 3)")
+            elif detected_chit_value == 50:
+                print(f"     - 2 x 20 PHP coins (Hopper 3)")
+                print(f"     - 1 x 10 PHP coin (Hopper 2)")
+            
+            print(f"{'='*60}\n")
+            
+            # Send the command
+            if send_to_esp32(f"AUTO_DISPENSE:{detected_chit_value}"):
+                # Update LCD
+                lcd.display_lines(
+                    "AUTO DISPENSE!",
+                    f"Chit: P{detected_chit_value}",
+                    "Dispensing...",
+                    "Please wait"
+                )
+                time.sleep(3)
+            else:
+                print(f"⚠️  Failed to send AUTO_DISPENSE command")
+                lcd.display_lines(
+                    "ERROR!",
+                    "Communication",
+                    "failed",
+                    ""
+                )
+                time.sleep(2)
+                
         elif time.time() - detection_start_time > DETECTION_TIMEOUT:
-            print("Detection timeout - no valid chit detected")
+            print(f"\n{'='*60}")
+            print(f"⏱️  DETECTION TIMEOUT")
+            print(f"{'='*60}")
+            print(f"   No valid chit detected within {DETECTION_TIMEOUT} seconds")
+            print(f"{'='*60}\n")
+            
             send_to_esp32("DETECTION_TIMEOUT")
             
             # Update LCD
@@ -501,10 +595,11 @@ while True:
                         if conf > detection_confidence:
                             detected_chit_value = chit_value
                             detection_confidence = conf
-                            print(f"Detected: ₱{chit_value} chit with {conf:.2%} confidence")
+                            
+                            elapsed = int(time.time() - detection_start_time)
+                            print(f"💰 Detected: ₱{chit_value} chit | Conf: {conf:.2%} | Time: {elapsed}s")
                             
                             # Update LCD with current best detection
-                            elapsed = int(time.time() - detection_start_time)
                             lcd.display_lines(
                                 "DETECTING...",
                                 f"Chit: P{chit_value}",
