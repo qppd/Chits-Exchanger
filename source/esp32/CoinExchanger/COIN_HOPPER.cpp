@@ -189,8 +189,8 @@ void IRAM_ATTR COIN_HOPPER::pulseISR_Hopper3() {
 void IRAM_ATTR COIN_HOPPER::handlePulseInterrupt() {
     unsigned long currentTime = millis();
     
-    // Debounce check - reduced for more responsive counting
-    if (currentTime - lastDebounceTime > (DEBOUNCE_TIME_MS / 2)) {
+    // Debounce check - use full debounce time to prevent double-counting
+    if (currentTime - lastDebounceTime > DEBOUNCE_TIME_MS) {
         pulseCount++;
         lastPulseTime = currentTime;
         lastDebounceTime = currentTime;
