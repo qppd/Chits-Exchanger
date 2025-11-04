@@ -187,14 +187,14 @@ void IRAM_ATTR COIN_HOPPER::pulseISR_Hopper3() {
 
 // Interrupt handler (called from ISR)
 void IRAM_ATTR COIN_HOPPER::handlePulseInterrupt() {
-    // No debounce needed - FALLING edge only triggers once when coin exits sensor
-    pulseCount++;
-    lastPulseTime = millis();
-    totalCoinsDetected++;
+    unsigned long currentTime = millis();
     
-    // Debug: Print pulse detection (commented out for production, enable if needed)
-    // Serial.print("[ISR] Pulse detected! Total: ");
-    // Serial.println(totalCoinsDetected);
+    // 140ms debounce - proven timing from arcade coin hopper applications
+    if (currentTime - lastPulseTime > 140) {
+        pulseCount++;
+        lastPulseTime = currentTime;
+        totalCoinsDetected++;
+    }
 }
 
 // Main update function
