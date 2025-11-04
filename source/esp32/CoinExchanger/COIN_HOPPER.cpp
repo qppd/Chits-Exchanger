@@ -295,17 +295,52 @@ bool COIN_HOPPER::dispenseCoins(int numberOfCoins) {
     dispensingStartTime = millis();
     targetDispenseCount = numberOfCoins;
     
-    // Note: In a real implementation, you would control a motor or solenoid here
-    // to actually dispense coins. This is a simulation that waits for pulses.
+    // Dispense coins one by one with motor ON/OFF cycle
+    int coinsDispensed = 0;
     
-    // Wait for the required number of pulses or timeout
-    while (isDispensing && (pulseCount - initialCount < numberOfCoins)) {
-        delay(10);
-        update();
+    for (int i = 0; i < numberOfCoins; i++) {
+        Serial.print("Dispensing coin ");
+        Serial.print(i + 1);
+        Serial.print(" of ");
+        Serial.println(numberOfCoins);
         
-        // Check for timeout
+        unsigned long coinStartCount = pulseCount;
+        unsigned long coinStartTime = millis();
+        
+        // Turn ON motor for this coin
+        enableSSR();
+        
+        // Wait for ONE pulse (one coin detected)
+        bool coinDetected = false;
+        while (!coinDetected && (millis() - coinStartTime < 5000)) {
+            delay(10);
+            update();
+            
+            // Check if we got a pulse
+            if (pulseCount > coinStartCount) {
+                coinDetected = true;
+                coinsDispensed++;
+                Serial.print("✓ Coin ");
+                Serial.print(i + 1);
+                Serial.println(" detected!");
+            }
+        }
+        
+        // Turn OFF motor after coin is detected
+        disableSSR();
+        
+        if (!coinDetected) {
+            Serial.print("⚠ Timeout waiting for coin ");
+            Serial.println(i + 1);
+            break;
+        }
+        
+        // Small delay between coins
+        delay(200);
+        
+        // Check for overall timeout
         if (millis() - dispensingStartTime > DISPENSE_TIMEOUT_MS) {
-            Serial.println("Dispensing timeout reached");
+            Serial.println("Overall dispensing timeout reached");
             break;
         }
     }
@@ -475,9 +510,6 @@ bool COIN_HOPPER::dispenseAmount(int amountInPesos) {
     Serial.print(" peso coins) from Hopper ");
     Serial.println(hopperId + 1);
     
-    // Turn on SSR for this hopper
-    enableSSR();
-    
     // Reset counters for this dispensing operation
     unsigned long initialCount = pulseCount;
     dispensedAmount = 0;
@@ -487,22 +519,58 @@ bool COIN_HOPPER::dispenseAmount(int amountInPesos) {
     isDispensing = true;
     dispensingStartTime = millis();
     
-    // Wait for the required number of pulses or timeout
-    while (isDispensing && (pulseCount - initialCount < coinsNeeded)) {
-        delay(10);
-        update();
+    // Dispense coins one by one with motor ON/OFF cycle
+    int coinsDispensed = 0;
+    
+    for (int i = 0; i < coinsNeeded; i++) {
+        Serial.print("Dispensing coin ");
+        Serial.print(i + 1);
+        Serial.print(" of ");
+        Serial.print(coinsNeeded);
+        Serial.print(" (");
+        Serial.print(coinValue);
+        Serial.println(" PHP)");
         
-        // Update dispensed amount
-        dispensedAmount = (pulseCount - initialCount) * coinValue;
+        unsigned long coinStartCount = pulseCount;
+        unsigned long coinStartTime = millis();
         
-        // Check if target amount reached
-        if (dispensedAmount >= targetDispenseAmount) {
+        // Turn ON motor for this coin
+        enableSSR();
+        
+        // Wait for ONE pulse (one coin detected)
+        bool coinDetected = false;
+        while (!coinDetected && (millis() - coinStartTime < 5000)) {
+            delay(10);
+            update();
+            
+            // Check if we got a pulse
+            if (pulseCount > coinStartCount) {
+                coinDetected = true;
+                coinsDispensed++;
+                dispensedAmount = coinsDispensed * coinValue;
+                Serial.print("✓ Coin ");
+                Serial.print(i + 1);
+                Serial.print(" detected! Total: ");
+                Serial.print(dispensedAmount);
+                Serial.println(" PHP");
+            }
+        }
+        
+        // Turn OFF motor after coin is detected
+        disableSSR();
+        
+        if (!coinDetected) {
+            Serial.print("⚠ Timeout waiting for coin ");
+            Serial.println(i + 1);
             break;
         }
         
-        // Check for timeout
+        // Small delay between coins to ensure clean separation
+        delay(200);
+        
+        // Check for overall timeout
         if (millis() - dispensingStartTime > DISPENSE_TIMEOUT_MS) {
-            Serial.println("Dispensing timeout reached");
+            Serial.println("Overall dispensing timeout reached");
             break;
         }
     }
@@ -520,7 +588,7 @@ bool COIN_HOPPER::dispenseAmount(int amountInPesos) {
     Serial.print(amountInPesos);
     Serial.println(" PHP requested");
     
-    // Turn off SSR after dispensing
+    // Ensure SSR is OFF after dispensing
     disableSSR();
     
     return (actualAmount == amountInPesos);
