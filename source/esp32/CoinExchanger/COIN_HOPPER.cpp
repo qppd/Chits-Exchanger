@@ -191,6 +191,10 @@ void IRAM_ATTR COIN_HOPPER::handlePulseInterrupt() {
     pulseCount++;
     lastPulseTime = millis();
     totalCoinsDetected++;
+    
+    // Debug: Print pulse detection (commented out for production, enable if needed)
+    // Serial.print("[ISR] Pulse detected! Total: ");
+    // Serial.println(totalCoinsDetected);
 }
 
 // Main update function
@@ -294,34 +298,62 @@ bool COIN_HOPPER::dispenseCoins(int numberOfCoins) {
     int coinsDispensed = 0;
     
     for (int i = 0; i < numberOfCoins; i++) {
-        Serial.print("Dispensing coin ");
+        Serial.print("\n--- Dispensing coin ");
         Serial.print(i + 1);
         Serial.print(" of ");
-        Serial.println(numberOfCoins);
+        Serial.print(numberOfCoins);
+        Serial.println(" ---");
         
         unsigned long coinStartCount = pulseCount;
         unsigned long coinStartTime = millis();
         
+        Serial.print("Pulse count before: ");
+        Serial.println(coinStartCount);
+        
         // Turn ON motor for this coin
+        Serial.println("Motor ON");
         enableSSR();
         
         // Wait for ONE pulse (one coin detected)
         bool coinDetected = false;
+        unsigned long loopCount = 0;
+        
         while (!coinDetected && (millis() - coinStartTime < 5000)) {
             delay(10);
             update();
+            loopCount++;
             
             // Check if we got exactly ONE pulse (coin has exited sensor)
             if (pulseCount > coinStartCount) {
+                unsigned long detectionTime = millis() - coinStartTime;
+                int pulsesReceived = pulseCount - coinStartCount;
+                
                 coinDetected = true;
                 coinsDispensed++;
+                
                 Serial.print("✓ Coin ");
                 Serial.print(i + 1);
                 Serial.println(" detected and exited!");
+                Serial.print("  Time taken: ");
+                Serial.print(detectionTime);
+                Serial.println(" ms");
+                Serial.print("  Pulses received: ");
+                Serial.println(pulsesReceived);
+                Serial.print("  Loop iterations: ");
+                Serial.println(loopCount);
+                Serial.print("  Pulse count after: ");
+                Serial.println(pulseCount);
+                
+                if (pulsesReceived > 1) {
+                    Serial.print("  ⚠ WARNING: Multiple pulses detected (");
+                    Serial.print(pulsesReceived);
+                    Serial.println(")!");
+                }
             }
         }
         
         // Turn OFF motor after coin has exited
+        Serial.println("Motor OFF");
         disableSSR();
         
         if (!coinDetected) {
@@ -343,11 +375,31 @@ bool COIN_HOPPER::dispenseCoins(int numberOfCoins) {
     stopDispensing();
     
     unsigned long actualDispensed = pulseCount - initialCount;
-    Serial.print("Dispensed ");
-    Serial.print(actualDispensed);
-    Serial.print(" of ");
+    
+    Serial.println("\n========== DISPENSING SUMMARY ==========");
+    Serial.print("Requested: ");
     Serial.print(numberOfCoins);
-    Serial.println(" requested coins");
+    Serial.println(" coins");
+    Serial.print("Dispensed: ");
+    Serial.print(actualDispensed);
+    Serial.println(" coins (based on pulses)");
+    Serial.print("Success rate: ");
+    Serial.print(coinsDispensed);
+    Serial.print(" / ");
+    Serial.println(numberOfCoins);
+    
+    if (actualDispensed != numberOfCoins) {
+        Serial.println("⚠ MISMATCH DETECTED!");
+        Serial.print("  Expected pulses: ");
+        Serial.println(numberOfCoins);
+        Serial.print("  Actual pulses: ");
+        Serial.println(actualDispensed);
+        Serial.print("  Difference: ");
+        Serial.println((int)actualDispensed - numberOfCoins);
+    } else {
+        Serial.println("✓ Perfect match!");
+    }
+    Serial.println("========================================\n");
     
     return (actualDispensed == numberOfCoins);
 }
