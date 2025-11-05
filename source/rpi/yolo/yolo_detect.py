@@ -170,13 +170,13 @@ if (not os.path.exists(model_path)):
     print('ERROR: Model path is invalid or model was not found. Make sure the model filename was entered correctly.')
     sys.exit(0)
 
-# Load the model into memory and get labemap
-model = YOLO(model_path, task='detect')
-labels = model.names
-
-# Set source type to USB webcam
-source_type = 'usb'
-print(f'Using USB webcam at /dev/video{args.camera}')
+print(f"\n{'='*60}")
+print(f"🚀 CHIT DETECTION SYSTEM - STARTUP")
+print(f"{'='*60}")
+print(f"Model: {model_path}")
+print(f"Camera: /dev/video{args.camera}")
+print(f"ESP32 Port: {args.esp32_port}")
+print(f"{'='*60}\n")
 
 # Parse user-specified display resolution
 resize = False
@@ -185,11 +185,14 @@ if user_res:
     resW, resH = int(user_res.split('x')[0]), int(user_res.split('x')[1])
 
 # Initialize GPIO for IR sensor and Servo
+print("Initializing GPIO...")
 GPIO.setmode(GPIO.BCM)
 GPIO.setwarnings(False)
 GPIO.setup(IR_SENSOR_PIN, GPIO.IN)
+print("✅ GPIO initialized")
 
 # Initialize pigpio for servo control
+print("Initializing servo control...")
 pi = pigpio.pi()
 if not pi.connected:
     print("ERROR: Could not connect to pigpio daemon. Run 'sudo pigpiod' first.")
@@ -247,18 +250,47 @@ except Exception as e:
     esp32_serial = None
 
 # Initialize I2C LCD Display
+print("\nInitializing LCD display...")
 lcd = LCD()
 if lcd.enabled:
     lcd.clear()
     lcd.display_lines(
         "Chit Detection",
-        "System Ready",
-        "Waiting for chit...",
-        ""
+        "System Initializing",
+        "Loading model...",
+        "Please wait..."
     )
-    time.sleep(2)
+    print("LCD ready - showing loading screen")
 else:
     print("LCD display not available - continuing without LCD")
+
+# Load the model into memory and get labelmap
+print(f"\n⏳ Loading YOLO model: {model_path}")
+print("   This may take 10-30 seconds depending on model size...")
+if lcd.enabled:
+    lcd.display_lines(
+        "Loading Model",
+        model_path.split('/')[-1],
+        "Please wait...",
+        "10-30 seconds"
+    )
+model_load_start = time.time()
+model = YOLO(model_path, task='detect')
+labels = model.names
+model_load_time = time.time() - model_load_start
+print(f"✅ Model loaded successfully in {model_load_time:.2f} seconds")
+print(f"   Detected classes: {list(labels.values())}")
+if lcd.enabled:
+    lcd.display_lines(
+        "Model Loaded!",
+        f"Time: {model_load_time:.1f}s",
+        "Initializing...",
+        ""
+    )
+    time.sleep(1)
+
+# Set source type to USB webcam
+source_type = 'usb'
 
 # Check if recording is valid and set up recording
 if record:
@@ -504,14 +536,34 @@ def capture_and_detect():
     return best_chit_value, best_confidence, detection_time
 
 # Begin YOLO detection using USB webcam
-print("Connected to USB webcam. Fast capture mode enabled.")
-print(f"IR Sensor on GPIO {IR_SENSOR_PIN}")
-print(f"Servo on GPIO {SERVO_PIN}")
+print(f"\n{'='*60}")
+print("✅ SYSTEM INITIALIZATION COMPLETE")
+print(f"{'='*60}")
+print(f"Camera: USB webcam at /dev/video{args.camera}")
+print(f"IR Sensor: GPIO {IR_SENSOR_PIN}")
+print(f"Servo: GPIO {SERVO_PIN}")
 print(f"Capture mode: {NUM_CAPTURE_IMAGES} images per detection")
 print(f"Display time: {DISPLAY_TIME} seconds per image")
-print("\n⏳ Loading complete! System ready for operation.")
+print(f"{'='*60}")
+print("\n🎉 System ready for operation!")
 print("Detection will start automatically when IR sensor is triggered.")
-print("Waiting for IR sensor to detect chit...")
+print("Waiting for chit insertion...\n")
+
+# Update LCD to ready state
+if lcd.enabled:
+    lcd.display_lines(
+        "System Ready!",
+        "Insert chit to",
+        "start exchange",
+        ""
+    )
+    time.sleep(2)
+    lcd.display_lines(
+        "Ready",
+        "Waiting for chit...",
+        "",
+        ""
+    )
 
 # Enable detection flag after loading
 detection_enabled = True
