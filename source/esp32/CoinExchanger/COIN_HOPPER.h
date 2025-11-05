@@ -30,6 +30,7 @@ private:
     int pulsePin;
     int hopperId;     // Unique identifier for this hopper instance
     int coinValue;    // Value of coins in this hopper (PHP)
+    int debounceTime; // Debounce time in ms (per hopper, configurable)
     SOLID_STATE_RELAY* ssr;  // SSR controller instance
     
     // Pulse counting variables

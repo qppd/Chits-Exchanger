@@ -19,6 +19,7 @@ COIN_HOPPER::COIN_HOPPER() {
     pulsePin = COIN_HOPPER_1_PULSE_PIN;
     hopperId = 0; // Default to hopper 1
     coinValue = COIN_HOPPER_1_VALUE;
+    debounceTime = 140; // Default 140ms (ElexHub timing)
     ssr = nullptr;  // Initialize SSR pointer to null
     pulseCount = 0;
     lastPulseTime = 0;
@@ -49,18 +50,22 @@ COIN_HOPPER::COIN_HOPPER(int hopperIdNumber) {
         case 0: 
             pulsePin = COIN_HOPPER_1_PULSE_PIN; 
             coinValue = COIN_HOPPER_1_VALUE;
+            debounceTime = 140; // 5 peso: 140ms
             break;
         case 1: 
             pulsePin = COIN_HOPPER_2_PULSE_PIN; 
             coinValue = COIN_HOPPER_2_VALUE;
+            debounceTime = 140; // 10 peso: 140ms
             break;
         case 2: 
             pulsePin = COIN_HOPPER_3_PULSE_PIN; 
             coinValue = COIN_HOPPER_3_VALUE;
+            debounceTime = 250; // 20 peso: LONGER debounce (more sensitive sensor)
             break;
         default: 
             pulsePin = COIN_HOPPER_1_PULSE_PIN; 
             coinValue = COIN_HOPPER_1_VALUE;
+            debounceTime = 140;
             hopperId = 0; 
             break;
     }
@@ -161,7 +166,10 @@ bool COIN_HOPPER::begin(int pulsePinNumber, int hopperIdNumber, int ssrPinNumber
     Serial.print(" initialized - Pulse: GPIO");
     Serial.print(pulsePin);
     Serial.print(", SSR: GPIO");
-    Serial.println(ssr->getPin());
+    Serial.print(ssr->getPin());
+    Serial.print(", Debounce: ");
+    Serial.print(debounceTime);
+    Serial.println("ms");
     
     return true;
 }
@@ -189,8 +197,8 @@ void IRAM_ATTR COIN_HOPPER::pulseISR_Hopper3() {
 void IRAM_ATTR COIN_HOPPER::handlePulseInterrupt() {
     unsigned long currentTime = millis();
     
-    // 140ms debounce - proven timing from arcade coin hopper applications
-    if (currentTime - lastPulseTime > 140) {
+    // Use per-hopper debounce timing (hopper 3/20peso needs longer debounce)
+    if (currentTime - lastPulseTime > debounceTime) {
         pulseCount++;
         lastPulseTime = currentTime;
         totalCoinsDetected++;

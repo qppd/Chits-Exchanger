@@ -200,6 +200,7 @@ try:
     print(f"Initializing serial connection to ESP32 on {args.esp32_port}...")
     
     # Open serial port with proper settings
+    # IMPORTANT: Set dsrdtr=False and rts=False to prevent ESP32 auto-reset
     esp32_serial = serial.Serial(
         port=args.esp32_port,
         baudrate=115200,
@@ -207,11 +208,17 @@ try:
         write_timeout=1.0,  # 1 second write timeout
         bytesize=serial.EIGHTBITS,
         parity=serial.PARITY_NONE,
-        stopbits=serial.STOPBITS_ONE
+        stopbits=serial.STOPBITS_ONE,
+        dsrdtr=False,  # Disable DSR/DTR to prevent ESP32 reset
+        rts=False      # Disable RTS to prevent ESP32 reset
     )
     
-    # Wait for connection to stabilize
-    time.sleep(2)
+    # Explicitly disable DTR and RTS after opening (belt and suspenders approach)
+    esp32_serial.dtr = False
+    esp32_serial.rts = False
+    
+    # Wait for connection to stabilize (reduced from 2s since no reset occurs)
+    time.sleep(0.5)
     
     # Clear any buffered data from initialization
     esp32_serial.reset_input_buffer()
@@ -220,7 +227,7 @@ try:
     print(f"✅ Serial connection to ESP32 established successfully")
     print(f"   Port: {args.esp32_port}")
     print(f"   Baud: 115200")
-    print(f"   Mode: Non-blocking")
+    print(f"   Mode: Non-blocking (DTR/RTS disabled)")
     
 except serial.SerialException as e:
     print(f"❌ Serial connection failed: {e}")
