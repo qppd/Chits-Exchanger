@@ -392,27 +392,82 @@ print("Successfully connected to USB webcam")
 bbox_colors = [(164,120,87), (68,148,228), (93,97,209), (178,182,133), (88,159,106), 
               (96,202,231), (159,124,168), (169,162,241), (98,118,150), (172,176,184)]
 
-# Initialize control and status variables
-avg_frame_rate = 0
-frame_rate_buffer = []
-fps_avg_len = 200
-img_count = 0
-
 # Detection state variables
-detection_active = False
 last_ir_state = False
-detected_chit_value = None
-detection_confidence = 0.0
-detection_start_time = 0
-DETECTION_TIMEOUT = 10  # seconds
+NUM_CAPTURE_IMAGES = 3  # Number of images to capture and analyze
+CAPTURE_DELAY = 0.1  # Delay between captures (seconds)
+
+
+# Helper function to capture and analyze images
+def capture_and_detect():
+    """Capture 3 images quickly and run inference to detect chit value"""
+    print(f"\n{'='*60}")
+    print(f"📸 CAPTURING {NUM_CAPTURE_IMAGES} IMAGES FOR DETECTION")
+    print(f"{'='*60}")
+    
+    best_chit_value = None
+    best_confidence = 0.0
+    all_detections = []
+    
+    t_detect_start = time.perf_counter()
+    
+    for img_num in range(NUM_CAPTURE_IMAGES):
+        # Capture frame
+        ret, frame = cap.read()
+        if not ret or frame is None:
+            print(f"❌ Failed to capture image {img_num + 1}")
+            continue
+        
+        # Resize if needed
+        if resize:
+            frame = cv2.resize(frame, (resW, resH))
+        
+        # Run inference
+        print(f"   Image {img_num + 1}/{NUM_CAPTURE_IMAGES}: Running inference...")
+        results = model(frame, verbose=False)
+        detections = results[0].boxes
+        
+        # Process detections
+        for i in range(len(detections)):
+            conf = detections[i].conf.item()
+            
+            if conf > 0.5:
+                classidx = int(detections[i].cls.item())
+                classname = labels[classidx]
+                
+                try:
+                    chit_value = int(classname)
+                    if chit_value in VALID_CHITS:
+                        all_detections.append((chit_value, conf))
+                        print(f"      ✓ Detected: ₱{chit_value} | Conf: {conf:.2%}")
+                        
+                        if conf > best_confidence:
+                            best_chit_value = chit_value
+                            best_confidence = conf
+                except ValueError:
+                    pass
+        
+        # Small delay between captures
+        if img_num < NUM_CAPTURE_IMAGES - 1:
+            time.sleep(CAPTURE_DELAY)
+    
+    t_detect_stop = time.perf_counter()
+    detection_time = t_detect_stop - t_detect_start
+    
+    print(f"\n   Total detections: {len(all_detections)}")
+    print(f"   Detection time: {detection_time:.3f}s")
+    print(f"{'='*60}\n")
+    
+    return best_chit_value, best_confidence, detection_time
 
 # Begin YOLO detection using USB webcam
-print("Connected to USB webcam. Running detection...")
+print("Connected to USB webcam. Fast capture mode enabled.")
 print(f"IR Sensor on GPIO {IR_SENSOR_PIN}")
 print(f"Servo on GPIO {SERVO_PIN}")
+print(f"Capture mode: {NUM_CAPTURE_IMAGES} images per detection")
 print("Waiting for IR sensor to detect chit...")
 
-# Begin inference loop
+# Begin monitoring loop
 while True:
     
     # Check for messages from ESP32
@@ -423,39 +478,32 @@ while True:
     # Check IR sensor state
     ir_detected = is_ir_detected()
     
-    # Start detection when IR sensor is triggered
+    # Start detection when IR sensor is triggered (rising edge)
     if ir_detected and not last_ir_state:
         print(f"\n{'='*60}")
         print(f"🔍 IR SENSOR TRIGGERED - CHIT DETECTED")
         print(f"{'='*60}")
-        print(f"   Starting YOLO detection...")
-        print(f"   Timeout: {DETECTION_TIMEOUT} seconds")
-        print(f"{'='*60}\n")
-        
-        detection_active = True
-        detected_chit_value = None
-        detection_confidence = 0.0
-        detection_start_time = time.time()
         
         send_to_esp32("IR_DETECTED")
         
         # Update LCD
         lcd.display_lines(
             "IR DETECTED!",
-            "Scanning chit...",
+            "Capturing images...",
             "Please wait...",
             ""
         )
-    
-    # Stop detection if IR sensor no longer detects or timeout
-    if detection_active and (not ir_detected or (time.time() - detection_start_time > DETECTION_TIMEOUT)):
+        
+        # Capture and detect
+        detected_chit_value, detection_confidence, detection_time = capture_and_detect()
+        
         if detected_chit_value:
             print(f"\n{'='*60}")
             print(f"🎉 DETECTION COMPLETE")
             print(f"{'='*60}")
             print(f"   Detected Value: ₱{detected_chit_value}")
             print(f"   Confidence: {detection_confidence:.2%}")
-            print(f"   Detection Time: {time.time() - detection_start_time:.2f}s")
+            print(f"   Detection Time: {detection_time:.3f}s")
             print(f"{'='*60}")
             
             # Update LCD
@@ -465,6 +513,9 @@ while True:
                 f"Conf: {int(detection_confidence*100)}%",
                 "Releasing chit..."
             )
+            
+            # Send detection result to ESP32
+            send_to_esp32(f"CHIT_DETECTED:{detected_chit_value}")
             
             # Release the chit
             print(f"🔓 Releasing chit via servo...")
@@ -511,27 +562,24 @@ while True:
                 )
                 time.sleep(2)
                 
-        elif time.time() - detection_start_time > DETECTION_TIMEOUT:
+        else:
             print(f"\n{'='*60}")
-            print(f"⏱️  DETECTION TIMEOUT")
+            print(f"❌ NO VALID CHIT DETECTED")
             print(f"{'='*60}")
-            print(f"   No valid chit detected within {DETECTION_TIMEOUT} seconds")
+            print(f"   No valid denomination found in captured images")
             print(f"{'='*60}\n")
             
             send_to_esp32("DETECTION_TIMEOUT")
             
             # Update LCD
             lcd.display_lines(
-                "TIMEOUT!",
+                "NO CHIT FOUND!",
                 "No valid chit",
                 "detected",
                 "Try again..."
             )
             time.sleep(2)
         
-        detection_active = False
-        detected_chit_value = None
-        detection_confidence = 0.0
         print("Waiting for next chit...\n")
         
         # Reset LCD to waiting state
@@ -543,138 +591,12 @@ while True:
         )
     
     last_ir_state = ir_detected
-
-    t_start = time.perf_counter()
-
-    # Read frame from USB webcam
-    ret, frame = cap.read()
-    if not ret or frame is None:
-        print('Unable to read frame from USB webcam. Exiting...')
-        break
-
-    # Resize frame to desired display resolution
-    if resize == True:
-        frame = cv2.resize(frame,(resW,resH))
-
-    # Run inference on frame
-    results = model(frame, verbose=False)
-
-    # Extract results
-    detections = results[0].boxes
-
-    # Initialize variable for basic object counting example
-    object_count = 0
-
-    # Go through each detection and get bbox coords, confidence, and class
-    for i in range(len(detections)):
-
-        # Get bounding box coordinates
-        # Ultralytics returns results in Tensor format, which have to be converted to a regular Python array
-        xyxy_tensor = detections[i].xyxy.cpu() # Detections in Tensor format in CPU memory
-        xyxy = xyxy_tensor.numpy().squeeze() # Convert tensors to Numpy array
-        xmin, ymin, xmax, ymax = xyxy.astype(int) # Extract individual coordinates and convert to int
-
-        # Get bounding box class ID and name
-        classidx = int(detections[i].cls.item())
-        classname = labels[classidx]
-
-        # Get bounding box confidence
-        conf = detections[i].conf.item()
-
-        # Draw box if confidence threshold is high enough
-        if conf > 0.5:
-
-            color = bbox_colors[classidx % 10]
-            cv2.rectangle(frame, (xmin,ymin), (xmax,ymax), color, 2)
-
-            label = f'{classname}: {int(conf*100)}%'
-            labelSize, baseLine = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1) # Get font size
-            label_ymin = max(ymin, labelSize[1] + 10) # Make sure not to draw label too close to top of window
-            cv2.rectangle(frame, (xmin, label_ymin-labelSize[1]-10), (xmin+labelSize[0], label_ymin+baseLine-10), color, cv2.FILLED) # Draw white box to put label text in
-            cv2.putText(frame, label, (xmin, label_ymin-7), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1) # Draw label text
-
-            # Basic example: count the number of objects in the image
-            object_count = object_count + 1
-            
-            # If detection is active, check for valid chit denominations
-            if detection_active:
-                try:
-                    # Try to extract denomination from class name (e.g., "5", "10", "20", "50")
-                    chit_value = int(classname)
-                    if chit_value in VALID_CHITS:
-                        # Update detected chit if confidence is higher
-                        if conf > detection_confidence:
-                            detected_chit_value = chit_value
-                            detection_confidence = conf
-                            
-                            elapsed = int(time.time() - detection_start_time)
-                            print(f"💰 Detected: ₱{chit_value} chit | Conf: {conf:.2%} | Time: {elapsed}s")
-                            
-                            # Update LCD with current best detection
-                            lcd.display_lines(
-                                "DETECTING...",
-                                f"Chit: P{chit_value}",
-                                f"Conf: {int(conf*100)}%",
-                                f"Time: {elapsed}s"
-                            )
-                except ValueError:
-                    # Class name is not a number, skip
-                    pass
-
-    # Calculate and draw framerate (if using video, USB, or Picamera source)
-    if source_type == 'video' or source_type == 'usb' or source_type == 'picamera':
-        cv2.putText(frame, f'FPS: {avg_frame_rate:0.2f}', (10,20), cv2.FONT_HERSHEY_SIMPLEX, .7, (0,255,255), 2) # Draw framerate
     
-    # Display detection results and status
-    cv2.putText(frame, f'Objects: {object_count}', (10,40), cv2.FONT_HERSHEY_SIMPLEX, .7, (0,255,255), 2)
-    
-    # Display IR sensor status
-    ir_status = "DETECTED" if ir_detected else "NO CHIT"
-    ir_color = (0,255,0) if ir_detected else (0,0,255)
-    cv2.putText(frame, f'IR: {ir_status}', (10,60), cv2.FONT_HERSHEY_SIMPLEX, .7, ir_color, 2)
-    
-    # Display detection status
-    if detection_active:
-        status_text = f'DETECTING... ({int(time.time() - detection_start_time)}s)'
-        if detected_chit_value:
-            status_text = f'DETECTED: P{detected_chit_value} ({detection_confidence:.0%})'
-        cv2.putText(frame, status_text, (10,80), cv2.FONT_HERSHEY_SIMPLEX, .7, (0,255,0), 2)
-    
-    if use_gui:
-        cv2.imshow('Chit Detection System', frame) # Display image
-    if record: recorder.write(frame)
-
-    # Wait for key press (5ms timeout)
-    if use_gui:
-        key = cv2.waitKey(5) & 0xFF
-    else:
-        key = -1
-    
-    if key == ord('q') or key == ord('Q'): # Press 'q' to quit
-        break
-    elif key == ord('s') or key == ord('S'): # Press 's' to pause inference
-        if use_gui: cv2.waitKey()
-    elif key == ord('p') or key == ord('P'): # Press 'p' to save a picture of results on this frame
-        cv2.imwrite('capture.png',frame)
-    
-    # Calculate FPS for this frame
-    t_stop = time.perf_counter()
-    frame_rate_calc = float(1/(t_stop - t_start))
-
-    # Append FPS result to frame_rate_buffer (for finding average FPS over multiple frames)
-    if len(frame_rate_buffer) >= fps_avg_len:
-        temp = frame_rate_buffer.pop(0)
-        frame_rate_buffer.append(frame_rate_calc)
-    else:
-        frame_rate_buffer.append(frame_rate_calc)
-
-    # Calculate average FPS for past frames
-    avg_frame_rate = np.mean(frame_rate_buffer)
-
+    # Small delay to prevent CPU spinning
+    time.sleep(0.05)
 
 # Clean up
 print(f'\nShutting down...')
-print(f'Average pipeline FPS: {avg_frame_rate:.2f}')
 
 # Update LCD
 lcd.display_lines(
@@ -701,7 +623,5 @@ lcd.clear()
 
 cap.release()
 if record: recorder.release()
-if use_gui:
-    cv2.destroyAllWindows()
 
 print("System shutdown complete.")
