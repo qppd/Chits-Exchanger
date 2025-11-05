@@ -394,8 +394,10 @@ bbox_colors = [(164,120,87), (68,148,228), (93,97,209), (178,182,133), (88,159,1
 
 # Detection state variables
 last_ir_state = False
+detection_enabled = False  # Flag to enable/disable detection
 NUM_CAPTURE_IMAGES = 3  # Number of images to capture and analyze
 CAPTURE_DELAY = 0.1  # Delay between captures (seconds)
+DISPLAY_TIME = 3  # Time to display each captured image (seconds)
 
 
 # Helper function to capture and analyze images
@@ -408,6 +410,7 @@ def capture_and_detect():
     best_chit_value = None
     best_confidence = 0.0
     all_detections = []
+    captured_frames = []
     
     t_detect_start = time.perf_counter()
     
@@ -422,18 +425,39 @@ def capture_and_detect():
         if resize:
             frame = cv2.resize(frame, (resW, resH))
         
+        # Store original frame for display
+        display_frame = frame.copy()
+        
         # Run inference
         print(f"   Image {img_num + 1}/{NUM_CAPTURE_IMAGES}: Running inference...")
         results = model(frame, verbose=False)
         detections = results[0].boxes
         
-        # Process detections
+        # Process detections and draw on frame
         for i in range(len(detections)):
             conf = detections[i].conf.item()
             
             if conf > 0.5:
                 classidx = int(detections[i].cls.item())
                 classname = labels[classidx]
+                
+                # Get bounding box coordinates
+                xyxy_tensor = detections[i].xyxy.cpu()
+                xyxy = xyxy_tensor.numpy().squeeze()
+                xmin, ymin, xmax, ymax = xyxy.astype(int)
+                
+                # Draw bounding box
+                color = bbox_colors[classidx % 10]
+                cv2.rectangle(display_frame, (xmin, ymin), (xmax, ymax), color, 2)
+                
+                # Draw label
+                label = f'{classname}: {int(conf*100)}%'
+                labelSize, baseLine = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)
+                label_ymin = max(ymin, labelSize[1] + 10)
+                cv2.rectangle(display_frame, (xmin, label_ymin-labelSize[1]-10), 
+                            (xmin+labelSize[0], label_ymin+baseLine-10), color, cv2.FILLED)
+                cv2.putText(display_frame, label, (xmin, label_ymin-7), 
+                          cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 2)
                 
                 try:
                     chit_value = int(classname)
@@ -447,6 +471,13 @@ def capture_and_detect():
                 except ValueError:
                     pass
         
+        # Add image number and timestamp to frame
+        cv2.putText(display_frame, f'Image {img_num + 1}/{NUM_CAPTURE_IMAGES}', 
+                   (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+        
+        # Store frame for display
+        captured_frames.append(display_frame)
+        
         # Small delay between captures
         if img_num < NUM_CAPTURE_IMAGES - 1:
             time.sleep(CAPTURE_DELAY)
@@ -458,6 +489,18 @@ def capture_and_detect():
     print(f"   Detection time: {detection_time:.3f}s")
     print(f"{'='*60}\n")
     
+    # Display all captured frames with detections
+    print(f"📺 Displaying {len(captured_frames)} captured images...")
+    for idx, frame in enumerate(captured_frames):
+        # Add detection result text
+        result_text = f"Best: P{best_chit_value} ({int(best_confidence*100)}%)" if best_chit_value else "No chit detected"
+        cv2.putText(frame, result_text, (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
+        
+        # Show the frame
+        cv2.imshow(f'Chit Detection - Image {idx + 1}', frame)
+        cv2.waitKey(DISPLAY_TIME * 1000)  # Display for DISPLAY_TIME seconds
+        cv2.destroyWindow(f'Chit Detection - Image {idx + 1}')
+    
     return best_chit_value, best_confidence, detection_time
 
 # Begin YOLO detection using USB webcam
@@ -465,7 +508,13 @@ print("Connected to USB webcam. Fast capture mode enabled.")
 print(f"IR Sensor on GPIO {IR_SENSOR_PIN}")
 print(f"Servo on GPIO {SERVO_PIN}")
 print(f"Capture mode: {NUM_CAPTURE_IMAGES} images per detection")
+print(f"Display time: {DISPLAY_TIME} seconds per image")
+print("\n⏳ Loading complete! System ready for operation.")
+print("Detection will start automatically when IR sensor is triggered.")
 print("Waiting for IR sensor to detect chit...")
+
+# Enable detection flag after loading
+detection_enabled = True
 
 # Begin monitoring loop
 while True:
@@ -478,8 +527,8 @@ while True:
     # Check IR sensor state
     ir_detected = is_ir_detected()
     
-    # Start detection when IR sensor is triggered (rising edge)
-    if ir_detected and not last_ir_state:
+    # Start detection when IR sensor is triggered (rising edge) AND detection is enabled
+    if ir_detected and not last_ir_state and detection_enabled:
         print(f"\n{'='*60}")
         print(f"🔍 IR SENSOR TRIGGERED - CHIT DETECTED")
         print(f"{'='*60}")
