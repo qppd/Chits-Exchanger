@@ -45,11 +45,16 @@ private:
     
     // State variables
     bool isInitialized;
-    bool isDispensing;
+    volatile bool isDispensing; // accessed in ISR
     unsigned long dispensingStartTime;
     int targetDispenseCount;
+    volatile unsigned long initialPulseCount; // Starting pulse count for this dispense operation
     int targetDispenseAmount;  // Target amount in pesos
     int dispensedAmount;       // Amount dispensed so far in pesos
+
+    // ISR-assisted pulse/relay flags
+    volatile bool waitingForPulseISR;   // true only during WAIT_PULSE
+    volatile bool pulseDetectedISR;     // set by ISR when pulse arrives while waiting
     
     // Statistics
     unsigned long totalCoinsDetected;

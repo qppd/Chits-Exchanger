@@ -126,16 +126,16 @@ void setup() {
   Serial.println("Integrated with RPi Chit Detection");
   
   // Initialize I2C for LCD
-  Wire.begin(21, 22);  // SDA, SCL
+  // Wire.begin(21, 22);  // SDA, SCL
   
-  // Initialize LCD
-  lcd.init();
-  lcd.backlight();
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print("Coin Exchanger");
-  lcd.setCursor(0, 1);
-  lcd.print("Initializing...");
+  // // Initialize LCD
+  // lcd.init();
+  // lcd.backlight();
+  // lcd.clear();
+  // lcd.setCursor(0, 0);
+  // lcd.print("Coin Exchanger");
+  // lcd.setCursor(0, 1);
+  // lcd.print("Initializing...");
   
   // Initialize button with interrupt
   pinMode(BUTTON_PIN, INPUT_PULLUP);
@@ -1276,51 +1276,14 @@ void testHopperDispense(int hopperId, int numCoins) {
   
   unsigned long startCount = hopper->getTotalCoins();
   
-  // Turn ON SSR
-  Serial.println("🟢 Turning ON SSR relay...");
-  hopper->enableSSR();
-  delay(500);  // Wait for relay to activate and motor to start
-  
+  // Let COIN_HOPPER manage SSR on/off internally
   Serial.println("🪙 Starting coin dispensing...");
   Serial.println("Watching for pulses (30 second timeout)...");
   
-  // Dispense by amount
+  // Dispense by amount (this function handles everything internally)
+  unsigned long testStart = millis();
   int amountToDispense = numCoins * coinValue;
   hopper->dispenseAmount(amountToDispense);
-  
-  // Monitor progress
-  unsigned long targetCount = startCount + numCoins;
-  unsigned long testStart = millis();
-  unsigned long lastUpdateTime = 0;
-  
-  while (hopper->getTotalCoins() < targetCount && (millis() - testStart) < 30000) {
-    hopper->update();
-    
-    unsigned long currentCount = hopper->getTotalCoins();
-    int dispensed = currentCount - startCount;
-    
-    // Print update every 500ms
-    if (millis() - lastUpdateTime > 500) {
-      Serial.print("Progress: ");
-      Serial.print(dispensed);
-      Serial.print("/");
-      Serial.print(numCoins);
-      Serial.print(" coins (");
-      Serial.print(dispensed * coinValue);
-      Serial.print("/");
-      Serial.print(numCoins * coinValue);
-      Serial.print(" PHP) | Rate: ");
-      Serial.print(hopper->getPulseRate(), 2);
-      Serial.println(" coins/sec");
-      lastUpdateTime = millis();
-    }
-    
-    delay(50);
-  }
-  
-  // Turn OFF SSR
-  Serial.println("🔴 Turning OFF SSR relay...");
-  hopper->disableSSR();
   
   // Final results
   unsigned long finalCount = hopper->getTotalCoins();

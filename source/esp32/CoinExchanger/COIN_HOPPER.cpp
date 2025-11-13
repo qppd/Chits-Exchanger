@@ -19,7 +19,7 @@ COIN_HOPPER::COIN_HOPPER() {
     pulsePin = COIN_HOPPER_1_PULSE_PIN;
     hopperId = 0; // Default to hopper 1
     coinValue = COIN_HOPPER_1_VALUE;
-    debounceTime = 140; // Default 140ms (ElexHub timing)
+    debounceTime = 40; // Set to 40ms for faster coin detection
     ssr = nullptr;  // Initialize SSR pointer to null
     pulseCount = 0;
     lastPulseTime = 0;
@@ -34,6 +34,8 @@ COIN_HOPPER::COIN_HOPPER() {
     dispensedAmount = 0;
     totalCoinsDetected = 0;
     currentPulseRate = 0.0;
+    waitingForPulseISR = false;
+    pulseDetectedISR = false;
     
     // Initialize pulse rate buffer
     for (int i = 0; i < 10; i++) {
@@ -50,22 +52,22 @@ COIN_HOPPER::COIN_HOPPER(int hopperIdNumber) {
         case 0: 
             pulsePin = COIN_HOPPER_1_PULSE_PIN; 
             coinValue = COIN_HOPPER_1_VALUE;
-            debounceTime = 140; // 5 peso: 140ms
+            debounceTime = 40; // 5 peso: 40ms
             break;
         case 1: 
             pulsePin = COIN_HOPPER_2_PULSE_PIN; 
             coinValue = COIN_HOPPER_2_VALUE;
-            debounceTime = 140; // 10 peso: 140ms
+            debounceTime = 40; // 10 peso: 40ms
             break;
         case 2: 
             pulsePin = COIN_HOPPER_3_PULSE_PIN; 
             coinValue = COIN_HOPPER_3_VALUE;
-            debounceTime = 250; // 20 peso: LONGER debounce (more sensitive sensor)
+            debounceTime = 40; // 20 peso: 40ms
             break;
         default: 
             pulsePin = COIN_HOPPER_1_PULSE_PIN; 
             coinValue = COIN_HOPPER_1_VALUE;
-            debounceTime = 140;
+            debounceTime = 40;
             hopperId = 0; 
             break;
     }
@@ -85,6 +87,8 @@ COIN_HOPPER::COIN_HOPPER(int hopperIdNumber) {
     dispensedAmount = 0;
     totalCoinsDetected = 0;
     currentPulseRate = 0.0;
+    waitingForPulseISR = false;
+    pulseDetectedISR = false;
     
     // Initialize pulse rate buffer
     for (int i = 0; i < 10; i++) {
@@ -202,6 +206,32 @@ void IRAM_ATTR COIN_HOPPER::handlePulseInterrupt() {
         pulseCount++;
         lastPulseTime = currentTime;
         totalCoinsDetected++;
+        
+        // If we are actively waiting for a pulse, shut off SSR immediately
+        if (isDispensing && waitingForPulseISR) {
+            pulseDetectedISR = true;   // mark pulse arrival
+            waitingForPulseISR = false; // prevent duplicate handling
+            if (ssr != nullptr) {
+                // Direct hardware cut (avoid Serial inside ISR)
+                int pin = ssr->getPin();
+                if (pin >= 0) {
+                    digitalWrite(pin, LOW);
+                }
+            }
+        }
+
+        // Also ensure target auto-shutoff
+        if (isDispensing && targetDispenseCount > 0) {
+            unsigned long currentCount = pulseCount - initialPulseCount;
+            if (currentCount >= targetDispenseCount) {
+                if (ssr != nullptr) {
+                    int pin = ssr->getPin();
+                    if (pin >= 0) {
+                        digitalWrite(pin, LOW);
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -308,87 +338,43 @@ bool COIN_HOPPER::dispenseCoins(int numberOfCoins) {
     // NOW capture the actual starting count (after any residual pulses)
     initialCount = pulseCount;
     
-    // Dispense coins one by one with motor ON/OFF cycle
-    int coinsDispensed = 0;
+    // Turn ON motor ONCE at the start
+    Serial.println("🟢 Motor ON - Starting continuous dispensing");
+    enableSSR();
     
-    for (int i = 0; i < numberOfCoins; i++) {
-        Serial.print("\n--- Dispensing coin ");
-        Serial.print(i + 1);
-        Serial.print(" of ");
-        Serial.print(numberOfCoins);
-        Serial.println(" ---");
+    // Wait for all coins to be dispensed (keep motor running)
+    unsigned long targetCount = initialCount + numberOfCoins;
+    unsigned long timeout = millis() + DISPENSE_TIMEOUT_MS;
+    
+    Serial.print("Waiting for ");
+    Serial.print(numberOfCoins);
+    Serial.println(" pulses...");
+    
+    while (pulseCount < targetCount && millis() < timeout) {
+        delay(10);
+        update();
         
-        unsigned long coinStartCount = pulseCount;
-        unsigned long coinStartTime = millis();
+        // Show progress when a pulse is detected
+        unsigned long currentDispensed = pulseCount - initialCount;
+        static unsigned long lastReported = 0;
         
-        Serial.print("Pulse count before: ");
-        Serial.println(coinStartCount);
-        
-        // Turn ON motor for this coin
-        Serial.println("Motor ON");
-        enableSSR();
-        
-        // Wait for ONE pulse (one coin detected)
-        bool coinDetected = false;
-        unsigned long loopCount = 0;
-        
-        while (!coinDetected && (millis() - coinStartTime < 5000)) {
-            delay(10);
-            update();
-            loopCount++;
-            
-            // Check if we got exactly ONE pulse (coin has exited sensor)
-            if (pulseCount > coinStartCount) {
-                unsigned long detectionTime = millis() - coinStartTime;
-                int pulsesReceived = pulseCount - coinStartCount;
-                
-                coinDetected = true;
-                coinsDispensed++;
-                
-                Serial.print("✓ Coin ");
-                Serial.print(i + 1);
-                Serial.println(" detected and exited!");
-                Serial.print("  Time taken: ");
-                Serial.print(detectionTime);
-                Serial.println(" ms");
-                Serial.print("  Pulses received: ");
-                Serial.println(pulsesReceived);
-                Serial.print("  Loop iterations: ");
-                Serial.println(loopCount);
-                Serial.print("  Pulse count after: ");
-                Serial.println(pulseCount);
-                
-                if (pulsesReceived > 1) {
-                    Serial.print("  ⚠ WARNING: Multiple pulses detected (");
-                    Serial.print(pulsesReceived);
-                    Serial.println(")!");
-                }
-            }
-        }
-        
-        // Turn OFF motor after coin has exited
-        Serial.println("Motor OFF");
-        disableSSR();
-        
-        if (!coinDetected) {
-            Serial.print("⚠ Timeout waiting for coin ");
-            Serial.println(i + 1);
-            break;
-        }
-        
-        // Longer delay between coins to ensure complete separation
-        delay(300);
-        
-        // Check for overall timeout
-        if (millis() - dispensingStartTime > DISPENSE_TIMEOUT_MS) {
-            Serial.println("Overall dispensing timeout reached");
-            break;
+        if (currentDispensed > lastReported) {
+            Serial.print("✓ Coin ");
+            Serial.print(currentDispensed);
+            Serial.print(" of ");
+            Serial.print(numberOfCoins);
+            Serial.println(" detected");
+            lastReported = currentDispensed;
         }
     }
     
-    stopDispensing();
-    
     unsigned long actualDispensed = pulseCount - initialCount;
+    
+    // Turn OFF motor after all coins dispensed
+    Serial.println("🔴 Motor OFF");
+    disableSSR();
+    
+    stopDispensing();
     
     Serial.println("\n========== DISPENSING SUMMARY ==========");
     Serial.print("Requested: ");
@@ -397,10 +383,6 @@ bool COIN_HOPPER::dispenseCoins(int numberOfCoins) {
     Serial.print("Dispensed: ");
     Serial.print(actualDispensed);
     Serial.println(" coins (based on pulses)");
-    Serial.print("Success rate: ");
-    Serial.print(coinsDispensed);
-    Serial.print(" / ");
-    Serial.println(numberOfCoins);
     
     if (actualDispensed != numberOfCoins) {
         Serial.println("⚠ MISMATCH DETECTED!");
@@ -410,6 +392,11 @@ bool COIN_HOPPER::dispenseCoins(int numberOfCoins) {
         Serial.println(actualDispensed);
         Serial.print("  Difference: ");
         Serial.println((int)actualDispensed - numberOfCoins);
+        
+        // Check if timeout occurred
+        if (millis() >= timeout) {
+            Serial.println("  Reason: TIMEOUT");
+        }
     } else {
         Serial.println("✓ Perfect match!");
     }
@@ -483,14 +470,24 @@ int COIN_HOPPER::getPulsePin() const {
 
 // SSR Control methods (delegated to SOLID_STATE_RELAY)
 void COIN_HOPPER::enableSSR() {
-    if (!isInitialized || ssr == nullptr) return;
+    if (!isInitialized || ssr == nullptr) {
+        Serial.println("⚠ WARNING: Cannot enable SSR - not initialized!");
+        return;
+    }
     
+    Serial.print("  [SSR] Turning ON SSR on GPIO ");
+    Serial.println(ssr->getPin());
     ssr->turnOn();
 }
 
 void COIN_HOPPER::disableSSR() {
-    if (!isInitialized || ssr == nullptr) return;
+    if (!isInitialized || ssr == nullptr) {
+        Serial.println("⚠ WARNING: Cannot disable SSR - not initialized!");
+        return;
+    }
     
+    Serial.print("  [SSR] Turning OFF SSR on GPIO ");
+    Serial.println(ssr->getPin());
     ssr->turnOff();
 }
 
@@ -562,103 +559,139 @@ bool COIN_HOPPER::dispenseAmount(int amountInPesos) {
         return false;
     }
     
-    Serial.print("Dispensing ");
+    Serial.print("\n=== DISPENSING ");
     Serial.print(amountInPesos);
     Serial.print(" PHP (");
     Serial.print(coinsNeeded);
-    Serial.print(" x ");
-    Serial.print(coinValue);
-    Serial.print(" peso coins) from Hopper ");
-    Serial.println(hopperId + 1);
+    Serial.println(" coins) ===");
     
-    // Reset counters for this dispensing operation
-    unsigned long initialCount = pulseCount;
-    dispensedAmount = 0;
-    targetDispenseAmount = amountInPesos;
-    targetDispenseCount = coinsNeeded;
-    
-    isDispensing = true;
-    dispensingStartTime = millis();
-    
-    // Wait a bit to ensure any previous coin has fully exited the sensor
-    delay(200);
-    
-    // NOW capture the actual starting count (after any residual pulses)
-    initialCount = pulseCount;
-    
-    // Dispense coins one by one with motor ON/OFF cycle
-    int coinsDispensed = 0;
-    
-    for (int i = 0; i < coinsNeeded; i++) {
-        Serial.print("Dispensing coin ");
-        Serial.print(i + 1);
-        Serial.print(" of ");
-        Serial.print(coinsNeeded);
-        Serial.print(" (");
-        Serial.print(coinValue);
-        Serial.println(" PHP)");
-        
-        unsigned long coinStartCount = pulseCount;
-        unsigned long coinStartTime = millis();
-        
-        // Turn ON motor for this coin
-        enableSSR();
-        
-        // Wait for ONE pulse (one coin detected)
-        bool coinDetected = false;
-        while (!coinDetected && (millis() - coinStartTime < 5000)) {
-            delay(10);
-            update();
-            
-            // Check if we got exactly ONE pulse (coin has exited sensor)
-            if (pulseCount > coinStartCount) {
-                coinDetected = true;
-                coinsDispensed++;
-                dispensedAmount = coinsDispensed * coinValue;
-                Serial.print("✓ Coin ");
-                Serial.print(i + 1);
-                Serial.print(" detected and exited! Total: ");
-                Serial.print(dispensedAmount);
-                Serial.println(" PHP");
-            }
-        }
-        
-        // Turn OFF motor after coin has exited
-        disableSSR();
-        
-        if (!coinDetected) {
-            Serial.print("⚠ Timeout waiting for coin ");
-            Serial.println(i + 1);
-            break;
-        }
-        
-        // Longer delay between coins to ensure complete separation
-        delay(300);
-        
-        // Check for overall timeout
-        if (millis() - dispensingStartTime > DISPENSE_TIMEOUT_MS) {
-            Serial.println("Overall dispensing timeout reached");
-            break;
-        }
+    // Ensure relay is OFF before starting
+    disableSSR();
+    unsigned long settleStart = millis();
+    while (millis() - settleStart < 5) {
+        // brief settle without blocking long
+        yield();
     }
     
-    stopDispensing();
+    // Capture starting pulse count
+    unsigned long startPulseCount = pulseCount;
+    unsigned long dispensingStart = millis();
+    int coinsDispensed = 0;
     
-    unsigned long actualCoins = pulseCount - initialCount;
-    int actualAmount = actualCoins * coinValue;
+    // Dispensing state machine
+    enum State { IDLE, RELAY_ON, WAIT_PULSE, RELAY_OFF, INTER_WAIT, DONE };
+    State state = IDLE;
+    unsigned long lastPulseCount = startPulseCount;
+    unsigned long stateStartTime = 0;
     
-    Serial.print("Dispensed ");
-    Serial.print(actualAmount);
-    Serial.print(" PHP (");
-    Serial.print(actualCoins);
-    Serial.print(" coins) of ");
-    Serial.print(amountInPesos);
-    Serial.println(" PHP requested");
+    while (state != DONE && (millis() - dispensingStart < DISPENSE_TIMEOUT_MS)) {
+        // Always check if target reached
+        unsigned long currentCoins = pulseCount - startPulseCount;
+        if (currentCoins >= coinsNeeded) {
+            Serial.print("✓ TARGET REACHED: ");
+            Serial.print(currentCoins);
+            Serial.println(" coins dispensed!");
+            disableSSR();
+            state = DONE;
+            break;
+        }
+        
+        switch (state) {
+            case IDLE:
+                // Check if we need more coins
+                if (coinsDispensed < coinsNeeded) {
+                    Serial.print("\n[Coin ");
+                    Serial.print(coinsDispensed + 1);
+                    Serial.print("/");
+                    Serial.print(coinsNeeded);
+                    Serial.println("] Starting...");
+                    state = RELAY_ON;
+                    stateStartTime = millis();
+                } else {
+                    state = DONE;
+                }
+                break;
+                
+            case RELAY_ON:
+                // Turn ON relay
+                Serial.println("  → SSR ON");
+                enableSSR();
+                lastPulseCount = pulseCount;
+                state = WAIT_PULSE;
+                stateStartTime = millis();
+                waitingForPulseISR = true;
+                pulseDetectedISR = false;
+                break;
+                
+            case WAIT_PULSE:
+                // Wait for pulse (non-blocking)
+                if (pulseDetectedISR || pulseCount > lastPulseCount) {
+                    // Pulse detected!
+                    coinsDispensed++;
+                    Serial.print("  ✓ PULSE detected! Total: ");
+                    Serial.println(pulseCount - startPulseCount);
+                    state = RELAY_OFF;
+                } else if (millis() - stateStartTime > 5000) {
+                    // Timeout
+                    Serial.println("  ⚠ Timeout - no pulse");
+                    state = RELAY_OFF;
+                }
+                break;
+                
+            case RELAY_OFF:
+                // Turn OFF relay immediately and forcefully
+                Serial.println("  → SSR OFF");
+                disableSSR();
+                // Start short non-blocking settle
+                stateStartTime = millis();
+                state = INTER_WAIT;
+                break;
+
+            case INTER_WAIT:
+                // Non-blocking settle and inter-coin spacing
+                // 40ms settle + 120ms spacing ~= 160ms total
+                if (millis() - stateStartTime >= 160) {
+                    // Check if target reached
+                    if ((pulseCount - startPulseCount) >= coinsNeeded) {
+                        state = DONE;
+                    } else {
+                        state = IDLE;
+                    }
+                }
+                break;
+                
+            case DONE:
+                // Do nothing, will exit loop
+                break;
+        }
+        
+        // Minimal yield to prevent watchdog
+        yield();
+    }
     
-    // Ensure SSR is OFF after dispensing
+    // Final cleanup
     disableSSR();
     
-    return (actualAmount == amountInPesos);
+    unsigned long finalCoins = pulseCount - startPulseCount;
+    int actualAmount = finalCoins * coinValue;
+    
+    Serial.print("\n=== RESULT ===");
+    Serial.print("\n  Requested: ");
+    Serial.print(coinsNeeded);
+    Serial.print(" coins (");
+    Serial.print(amountInPesos);
+    Serial.println(" PHP)");
+    Serial.print("  Dispensed: ");
+    Serial.print(finalCoins);
+    Serial.print(" coins (");
+    Serial.print(actualAmount);
+    Serial.println(" PHP)");
+    Serial.print("  Time: ");
+    Serial.print((millis() - dispensingStart) / 1000.0);
+    Serial.println(" sec");
+    Serial.println("==============\n");
+    
+    return (finalCoins == coinsNeeded);
 }
 
 int COIN_HOPPER::calculateCoinsNeeded(int amountInPesos) const {
