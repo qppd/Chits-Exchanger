@@ -410,6 +410,38 @@ LCD: "Complete! Dispensed: P50"
 Reset to Idle
 ```
 
+---
+
+## 🛠️ November 2025: Hopper Timing Overhaul
+
+We refactored the ALLAN coin hopper control to achieve precise, repeatable alignment between pulse detection and relay switching.
+
+Key changes:
+- ISR-driven immediate SSR cut: When a valid pulse arrives during dispensing, the interrupt handler turns OFF the relay directly (no main-loop latency).
+- Non-blocking state machine: RELAY_ON → WAIT_PULSE → RELAY_OFF → INTER_WAIT (millis-based, no long delays).
+- ISR flags to sync with main loop: The loop transitions as soon as the ISR flags a pulse, avoiding race conditions.
+- Debounce set to 40 ms per hopper for fast dispensing while suppressing bounce.
+- Test harness updated to let `COIN_HOPPER` own SSR timing.
+
+Files impacted:
+- `source/esp32/CoinExchanger/COIN_HOPPER.cpp/.h`
+- `source/esp32/CoinExchanger/CoinExchanger.ino` (test function)
+- `source/esp32/CoinExchanger/SOLID_STATE_RELAY.*` (no API change)
+
+How to test (Serial Monitor):
+- Command: `test_hopper 1 2` → Dispense 2 coins from hopper 1 (5 PHP)
+- Watch for per-coin sequence: SSR ON → pulse ISR → SSR OFF immediately → short INTER_WAIT → next coin
+- Target reached behavior: Relay cuts instantly and dispensing stops.
+
+Tuning notes:
+- If inertia causes trailing coins, adjust `INTER_WAIT` timing in `COIN_HOPPER.cpp` (default ~160 ms).
+- If pulses are missed or doubled, fine-tune `debounceTime` (currently 40 ms per hopper).
+
+Troubleshooting:
+- If SSR appears inverted (active-low hardware), invert ON/OFF logic in `SOLID_STATE_RELAY.cpp` (HIGH/LOW writes).
+- Enable Serial logs to confirm SSR ON/OFF and pulse totals per coin.
+
+
 ### Serial Communication Protocol
 
 **RPi → ESP32 (Detection Messages):**
