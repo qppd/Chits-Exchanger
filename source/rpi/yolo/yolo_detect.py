@@ -124,6 +124,65 @@ class LCD:
         if line4:
             self.lcd_string(line4, LCD_LINE_4)
 
+# Auto-detection functions
+def find_usb_cameras():
+    """Automatically detect available USB cameras"""
+    print("\n🔍 Scanning for USB cameras...")
+    available_cameras = []
+    
+    # Check /dev/video* devices
+    for i in range(10):  # Check video0 to video9
+        cap = cv2.VideoCapture(i)
+        if cap.isOpened():
+            ret, frame = cap.read()
+            if ret:
+                available_cameras.append(i)
+                print(f"   ✅ Found camera at /dev/video{i}")
+            cap.release()
+    
+    if not available_cameras:
+        print("   ❌ No USB cameras found")
+        return None
+    
+    # Return the first available camera
+    selected = available_cameras[0]
+    print(f"   📷 Selected: /dev/video{selected}")
+    return selected
+
+def find_esp32_port():
+    """Automatically detect ESP32 serial port"""
+    print("\n🔍 Scanning for ESP32 serial port...")
+    
+    import serial.tools.list_ports
+    
+    # List all available serial ports
+    ports = serial.tools.list_ports.comports()
+    
+    if not ports:
+        print("   ❌ No serial ports found")
+        return None
+    
+    # Look for common ESP32 identifiers
+    esp32_keywords = ['CP210', 'CH340', 'USB', 'UART', 'Serial']
+    
+    for port in ports:
+        port_info = f"{port.device} - {port.description} - {port.manufacturer}"
+        print(f"   Found: {port_info}")
+        
+        # Check if it matches ESP32 patterns
+        for keyword in esp32_keywords:
+            if keyword.lower() in port_info.lower():
+                print(f"   ✅ ESP32 detected at: {port.device}")
+                return port.device
+    
+    # If no match found, use first available port
+    if ports:
+        selected = ports[0].device
+        print(f"   ⚠️  No ESP32 pattern matched, using first port: {selected}")
+        return selected
+    
+    return None
+
 # Determine if GUI is available (e.g., from terminal or desktop session)
 use_gui = "DISPLAY" in os.environ
 
@@ -138,15 +197,33 @@ parser.add_argument('--resolution', help='Resolution in WxH to display inference
                     default=None)
 parser.add_argument('--record', help='Record results from video or webcam and save it as "demo1.avi". Must specify --resolution argument to record.',
                     action='store_true')
-parser.add_argument('--esp32_port', help='Serial port for ESP32 communication (example: "/dev/ttyUSB0")',
-                    default='/dev/ttyUSB0')
-parser.add_argument('--camera', help='USB camera device ID (example: "0" for /dev/video0)',
-                    default='0')
+parser.add_argument('--esp32_port', help='Serial port for ESP32 communication (example: "/dev/ttyUSB0"). If not specified, will auto-detect.',
+                    default=None)
+parser.add_argument('--camera', help='USB camera device ID (example: "0" for /dev/video0). If not specified, will auto-detect.',
+                    default=None)
 
 args = parser.parse_args()
 
-# USB camera device
-img_source = int(args.camera)
+# Auto-detect camera if not specified
+if args.camera is None:
+    detected_camera = find_usb_cameras()
+    if detected_camera is None:
+        print("❌ No camera found. Please connect a USB camera and try again.")
+        sys.exit(1)
+    img_source = detected_camera
+else:
+    img_source = int(args.camera)
+
+# Auto-detect ESP32 port if not specified
+if args.esp32_port is None:
+    detected_port = find_esp32_port()
+    if detected_port is None:
+        print("⚠️  No ESP32 port found. System will run without ESP32 communication.")
+        esp32_port = None
+    else:
+        esp32_port = detected_port
+else:
+    esp32_port = args.esp32_port
 
 # GPIO Pin Configurations for RPi
 IR_SENSOR_PIN = 17  # IR sensor input
@@ -174,8 +251,8 @@ print(f"\n{'='*60}")
 print(f"🚀 CHIT DETECTION SYSTEM - STARTUP")
 print(f"{'='*60}")
 print(f"Model: {model_path}")
-print(f"Camera: /dev/video{args.camera}")
-print(f"ESP32 Port: {args.esp32_port}")
+print(f"Camera: /dev/video{img_source} {'(auto-detected)' if args.camera is None else ''}")
+print(f"ESP32 Port: {esp32_port if esp32_port else 'Not connected'} {'(auto-detected)' if args.esp32_port is None else ''}")
 print(f"{'='*60}\n")
 
 # Parse user-specified display resolution
@@ -200,12 +277,15 @@ if not pi.connected:
 
 # Initialize serial communication with ESP32
 try:
-    print(f"Initializing serial connection to ESP32 on {args.esp32_port}...")
+    if esp32_port is None:
+        raise serial.SerialException("No ESP32 port available")
+    
+    print(f"Initializing serial connection to ESP32 on {esp32_port}...")
     
     # Open serial port with proper settings
     # IMPORTANT: Disable DTR/RTS to prevent ESP32 auto-reset
     esp32_serial = serial.Serial()
-    esp32_serial.port = args.esp32_port
+    esp32_serial.port = esp32_port
     esp32_serial.baudrate = 115200
     esp32_serial.timeout = 0.01  # Very short timeout for non-blocking reads
     esp32_serial.write_timeout = 1.0  # 1 second write timeout
@@ -232,14 +312,14 @@ try:
     esp32_serial.reset_output_buffer()
     
     print(f"✅ Serial connection to ESP32 established successfully")
-    print(f"   Port: {args.esp32_port}")
+    print(f"   Port: {esp32_port}")
     print(f"   Baud: 115200")
     print(f"   Mode: Non-blocking (DTR/RTS disabled)")
     
 except serial.SerialException as e:
     print(f"❌ Serial connection failed: {e}")
     print(f"   Please check:")
-    print(f"   1. ESP32 is connected to {args.esp32_port}")
+    print(f"   1. ESP32 is connected to {esp32_port if esp32_port else 'a USB port'}")
     print(f"   2. User has permissions (run: sudo usermod -a -G dialout $USER)")
     print(f"   3. No other program is using the port")
     print("⚠️  Continuing without ESP32 serial communication...")
@@ -335,6 +415,10 @@ def reconnect_esp32():
     print("\n🔄 Attempting to reconnect to ESP32...")
     
     try:
+        if esp32_port is None:
+            print("❌ No ESP32 port configured")
+            return False
+        
         # Close existing connection if open
         if esp32_serial and esp32_serial.is_open:
             esp32_serial.close()
@@ -342,7 +426,7 @@ def reconnect_esp32():
         
         # Reinitialize serial connection
         esp32_serial = serial.Serial()
-        esp32_serial.port = args.esp32_port
+        esp32_serial.port = esp32_port
         esp32_serial.baudrate = 115200
         esp32_serial.timeout = 0.01
         esp32_serial.write_timeout = 1.0
