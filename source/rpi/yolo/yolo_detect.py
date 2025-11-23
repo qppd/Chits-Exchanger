@@ -405,20 +405,8 @@ def is_ir_detected():
 set_servo_angle(SERVO_INITIAL_ANGLE)
 print(f"Servo initialized to {SERVO_INITIAL_ANGLE}°")
 
-# Initialize USB webcam connection
-cap = cv2.VideoCapture(img_source)
-
-# Set camera resolution if specified by user
-if user_res:
-    ret = cap.set(3, resW)
-    ret = cap.set(4, resH)
-
-# Check if connection is successful
-if not cap.isOpened():
-    print(f"Failed to open USB camera /dev/video{args.camera}")
-    sys.exit(1)
-
-print("Successfully connected to USB webcam")
+# Camera will be opened only when needed (on IR trigger)
+print(f"Camera will be initialized on demand (USB /dev/video{args.camera})")
 
 # Set bounding box colors (using the Tableu 10 color scheme)
 bbox_colors = [(164,120,87), (68,148,228), (93,97,209), (178,182,133), (88,159,106), 
@@ -438,6 +426,31 @@ def capture_and_detect():
     print(f"\n{'='*60}")
     print(f"📸 CAPTURING {NUM_CAPTURE_IMAGES} IMAGES FOR DETECTION")
     print(f"{'='*60}")
+    
+    # Open camera
+    print("Opening camera...")
+    cap = cv2.VideoCapture(img_source)
+    
+    # Set camera resolution if specified by user
+    if user_res:
+        cap.set(3, resW)
+        cap.set(4, resH)
+    
+    # Check if connection is successful
+    if not cap.isOpened():
+        print(f"❌ Failed to open USB camera /dev/video{args.camera}")
+        lcd.display_lines(
+            "ERROR!",
+            "Camera failed",
+            "to open",
+            ""
+        )
+        return None, 0.0, 0.0
+    
+    print("✅ Camera opened successfully")
+    
+    # Let camera warm up
+    time.sleep(0.5)
     
     best_chit_value = None
     best_confidence = 0.0
@@ -532,6 +545,10 @@ def capture_and_detect():
         cv2.imshow(f'Chit Detection - Image {idx + 1}', frame)
         cv2.waitKey(DISPLAY_TIME * 1000)  # Display for DISPLAY_TIME seconds
         cv2.destroyWindow(f'Chit Detection - Image {idx + 1}')
+    
+    # Close camera to free resources
+    cap.release()
+    print("✅ Camera closed - resources freed")
     
     return best_chit_value, best_confidence, detection_time
 
@@ -722,7 +739,7 @@ if esp32_serial and esp32_serial.is_open:
 # Clear LCD before exit
 lcd.clear()
 
-cap.release()
+# Note: Camera is opened/closed on demand, no need to release here
 if record: recorder.release()
 
 print("System shutdown complete.")
