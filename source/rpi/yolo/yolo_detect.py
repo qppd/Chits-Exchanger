@@ -419,6 +419,13 @@ def reconnect_esp32():
             print("❌ No ESP32 port configured")
             return False
         
+        # Check if port still exists physically
+        if not os.path.exists(esp32_port):
+            print(f"❌ Port {esp32_port} no longer exists (device unplugged?)")
+            print("⚠️  Please reconnect ESP32 and restart the system")
+            esp32_serial = None
+            return False
+        
         # Close existing connection if open
         if esp32_serial and esp32_serial.is_open:
             esp32_serial.close()
@@ -559,145 +566,161 @@ DISPLAY_TIME = 3  # Time to display each captured image (seconds)
 
 # Helper function to capture and analyze images
 def capture_and_detect():
-    """Capture 3 images quickly and run inference to detect chit value"""
+    """Run real-time chit detection until valid chit is found"""
     print(f"\n{'='*60}")
-    print(f"📸 CAPTURING {NUM_CAPTURE_IMAGES} IMAGES FOR DETECTION")
+    print(f"📹 STARTING REAL-TIME CHIT DETECTION")
     print(f"{'='*60}")
-    
+
     # Open camera
     print("Opening camera...")
     cap = cv2.VideoCapture(img_source)
-    
+
     # Set camera resolution if specified by user
     if user_res:
         cap.set(3, resW)
         cap.set(4, resH)
-    
+
     # Check if connection is successful
     if not cap.isOpened():
-        print(f"❌ Failed to open USB camera /dev/video{args.camera}")
-        lcd.display_lines(
-            "ERROR!",
-            "Camera failed",
-            "to open",
-            ""
-        )
+        print(f"❌ Failed to open USB camera /dev/video{img_source}")
+        if lcd.enabled:
+            lcd.display_lines(
+                "ERROR!",
+                "Camera failed",
+                "to open",
+                ""
+            )
         return None, 0.0, 0.0
-    
+
     print("✅ Camera opened successfully")
-    
-    # Let camera warm up
-    time.sleep(0.5)
-    
-    best_chit_value = None
-    best_confidence = 0.0
-    all_detections = []
-    captured_frames = []
-    
+
+    # Let camera warm up and stabilize
+    time.sleep(1.0)
+
+    # Flush first few frames (often corrupted)
+    for _ in range(3):
+        cap.read()
+
+    print("Camera ready for real-time detection")
+    print("Press 'q' to cancel detection")
+
     t_detect_start = time.perf_counter()
-    
-    for img_num in range(NUM_CAPTURE_IMAGES):
+    detection_timeout = 30  # 30 seconds timeout
+    last_detection_time = 0
+    detection_cooldown = 2  # 2 seconds between detections
+
+    while True:
+        # Check for timeout
+        current_time = time.perf_counter()
+        if current_time - t_detect_start > detection_timeout:
+            print("⏰ Detection timeout - no chit detected")
+            break
+
         # Capture frame
         ret, frame = cap.read()
         if not ret or frame is None:
-            print(f"❌ Failed to capture image {img_num + 1}")
+            print("❌ Failed to capture frame")
+            time.sleep(0.1)
             continue
-        
+
         # Resize if needed
         if resize:
             frame = cv2.resize(frame, (resW, resH))
-        
+
         # Store original frame for display
         display_frame = frame.copy()
-        
+
         # Run inference
-        print(f"   Image {img_num + 1}/{NUM_CAPTURE_IMAGES}: Running inference...")
         results = model(frame, verbose=False)
         detections = results[0].boxes
-        
+
         # Process detections and draw on frame
+        detected_chit = None
+        detected_conf = 0.0
+
         for i in range(len(detections)):
             conf = detections[i].conf.item()
-            
-            if conf > 0.5:
+
+            if conf > 0.5:  # Minimum confidence threshold
                 classidx = int(detections[i].cls.item())
                 classname = labels[classidx]
-                
+
                 # Get bounding box coordinates
                 xyxy_tensor = detections[i].xyxy.cpu()
                 xyxy = xyxy_tensor.numpy().squeeze()
                 xmin, ymin, xmax, ymax = xyxy.astype(int)
-                
+
                 # Draw bounding box
                 color = bbox_colors[classidx % 10]
                 cv2.rectangle(display_frame, (xmin, ymin), (xmax, ymax), color, 2)
-                
+
                 # Draw label
                 label = f'{classname}: {int(conf*100)}%'
                 labelSize, baseLine = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)
                 label_ymin = max(ymin, labelSize[1] + 10)
-                cv2.rectangle(display_frame, (xmin, label_ymin-labelSize[1]-10), 
+                cv2.rectangle(display_frame, (xmin, label_ymin-labelSize[1]-10),
                             (xmin+labelSize[0], label_ymin+baseLine-10), color, cv2.FILLED)
-                cv2.putText(display_frame, label, (xmin, label_ymin-7), 
+                cv2.putText(display_frame, label, (xmin, label_ymin-7),
                           cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 2)
-                
+
                 try:
                     chit_value = int(classname)
-                    if chit_value in VALID_CHITS:
-                        all_detections.append((chit_value, conf))
-                        print(f"      ✓ Detected: ₱{chit_value} | Conf: {conf:.2%}")
-                        
-                        if conf > best_confidence:
-                            best_chit_value = chit_value
-                            best_confidence = conf
+                    if chit_value in VALID_CHITS and conf > detected_conf:
+                        detected_chit = chit_value
+                        detected_conf = conf
                 except ValueError:
                     pass
-        
-        # Add image number and timestamp to frame
-        cv2.putText(display_frame, f'Image {img_num + 1}/{NUM_CAPTURE_IMAGES}', 
-                   (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-        
-        # Store frame for display
-        captured_frames.append(display_frame)
-        
-        # Small delay between captures
-        if img_num < NUM_CAPTURE_IMAGES - 1:
-            time.sleep(CAPTURE_DELAY)
-    
-    t_detect_stop = time.perf_counter()
-    detection_time = t_detect_stop - t_detect_start
-    
-    print(f"\n   Total detections: {len(all_detections)}")
-    print(f"   Detection time: {detection_time:.3f}s")
-    print(f"{'='*60}\n")
-    
-    # Display all captured frames with detections
-    print(f"📺 Displaying {len(captured_frames)} captured images...")
-    for idx, frame in enumerate(captured_frames):
-        # Add detection result text
-        result_text = f"Best: P{best_chit_value} ({int(best_confidence*100)}%)" if best_chit_value else "No chit detected"
-        cv2.putText(frame, result_text, (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
-        
+
+        # Add status text to frame
+        status_text = f"Real-time Detection - {int(current_time - t_detect_start)}s"
+        cv2.putText(display_frame, status_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+
+        if detected_chit:
+            result_text = f"DETECTED: P{detected_chit} ({int(detected_conf*100)}%)"
+            cv2.putText(display_frame, result_text, (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
+
+            # Check if enough time has passed since last detection
+            if current_time - last_detection_time > detection_cooldown:
+                print(f"\n🎯 CHIT DETECTED: ₱{detected_chit} | Confidence: {detected_conf:.2%}")
+
+                # Show final frame for 2 seconds
+                cv2.imshow('Chit Detection - Real-time', display_frame)
+                cv2.waitKey(2000)
+                cv2.destroyWindow('Chit Detection - Real-time')
+
+                # Close camera
+                cap.release()
+                print("✅ Camera closed - resources freed")
+
+                t_detect_stop = time.perf_counter()
+                detection_time = t_detect_stop - t_detect_start
+
+                return detected_chit, detected_conf, detection_time
+
         # Show the frame
-        cv2.imshow(f'Chit Detection - Image {idx + 1}', frame)
-        cv2.waitKey(DISPLAY_TIME * 1000)  # Display for DISPLAY_TIME seconds
-        cv2.destroyWindow(f'Chit Detection - Image {idx + 1}')
-    
-    # Close camera to free resources
+        cv2.imshow('Chit Detection - Real-time', display_frame)
+
+        # Check for quit key
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            print("❌ Detection cancelled by user")
+            break
+
+    # Close camera if we exit the loop
     cap.release()
+    cv2.destroyWindow('Chit Detection - Real-time')
     print("✅ Camera closed - resources freed")
-    
-    return best_chit_value, best_confidence, detection_time
+
+    return None, 0.0, 0.0
 
 # Begin YOLO detection using USB webcam
 print(f"\n{'='*60}")
 print("✅ SYSTEM INITIALIZATION COMPLETE")
 print(f"{'='*60}")
-print(f"Camera: USB webcam at /dev/video{args.camera}")
+print(f"Camera: USB webcam at /dev/video{img_source}")
 print(f"IR Sensor: GPIO {IR_SENSOR_PIN}")
 print(f"Servo: GPIO {SERVO_PIN}")
-print(f"Capture mode: {NUM_CAPTURE_IMAGES} images per detection")
-print(f"Display time: {DISPLAY_TIME} seconds per image")
+print(f"Detection mode: Real-time detection")
+print(f"Timeout: 30 seconds per detection")
 print(f"{'='*60}")
 print("\n🎉 System ready for operation!")
 print("Detection will start automatically when IR sensor is triggered.")
