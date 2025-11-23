@@ -328,6 +328,46 @@ def release_chit():
     print(f"Returning servo to initial position {SERVO_INITIAL_ANGLE}°")
     set_servo_angle(SERVO_INITIAL_ANGLE)
 
+def reconnect_esp32():
+    """Attempt to reconnect to ESP32 after connection loss"""
+    global esp32_serial
+    
+    print("\n🔄 Attempting to reconnect to ESP32...")
+    
+    try:
+        # Close existing connection if open
+        if esp32_serial and esp32_serial.is_open:
+            esp32_serial.close()
+            time.sleep(0.5)
+        
+        # Reinitialize serial connection
+        esp32_serial = serial.Serial()
+        esp32_serial.port = args.esp32_port
+        esp32_serial.baudrate = 115200
+        esp32_serial.timeout = 0.01
+        esp32_serial.write_timeout = 1.0
+        esp32_serial.bytesize = serial.EIGHTBITS
+        esp32_serial.parity = serial.PARITY_NONE
+        esp32_serial.stopbits = serial.STOPBITS_ONE
+        esp32_serial.dtr = False
+        esp32_serial.rts = False
+        
+        esp32_serial.open()
+        esp32_serial.dtr = False
+        esp32_serial.rts = False
+        
+        time.sleep(0.5)
+        esp32_serial.reset_input_buffer()
+        esp32_serial.reset_output_buffer()
+        
+        print("✅ ESP32 reconnected successfully")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Reconnection failed: {e}")
+        esp32_serial = None
+        return False
+
 def send_to_esp32(message):
     """Send message to ESP32 via serial with proper formatting and error handling"""
     if esp32_serial and esp32_serial.is_open:
@@ -342,11 +382,22 @@ def send_to_esp32(message):
             
             print(f"✅ Sent to ESP32: {message}")
             return True
-        except serial.SerialException as e:
-            print(f"❌ Serial error sending to ESP32: {e}")
+        except (serial.SerialException, OSError) as e:
+            print(f"❌ Error sending to ESP32: {e}")
+            # Try to reconnect on I/O error
+            if reconnect_esp32():
+                # Retry sending after reconnect
+                try:
+                    full_message = message + '\n'
+                    esp32_serial.write(full_message.encode('utf-8'))
+                    esp32_serial.flush()
+                    print(f"✅ Sent to ESP32 (after reconnect): {message}")
+                    return True
+                except:
+                    return False
             return False
         except Exception as e:
-            print(f"❌ Error sending to ESP32: {e}")
+            print(f"❌ Unexpected error sending to ESP32: {e}")
             return False
     else:
         print(f"⚠️  Cannot send '{message}' - Serial not connected")
@@ -389,8 +440,10 @@ def read_from_esp32():
                         print(f"📨 ESP32: {message}")
                     
                     return message
-        except serial.SerialException as e:
-            print(f"❌ Serial exception reading from ESP32: {e}")
+        except (serial.SerialException, OSError) as e:
+            print(f"❌ I/O error reading from ESP32: {e}")
+            # Attempt reconnection on I/O error
+            reconnect_esp32()
         except UnicodeDecodeError as e:
             print(f"⚠️  Decode error reading from ESP32: {e}")
         except Exception as e:
