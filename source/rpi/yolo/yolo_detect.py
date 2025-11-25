@@ -171,7 +171,7 @@ if (not os.path.exists(model_path)):
     sys.exit(0)
 
 print(f"\n{'='*60}")
-print(f"🚀 CHIT DETECTION SYSTEM - STARTUP")
+print(f"ðŸš€ CHIT DETECTION SYSTEM - STARTUP")
 print(f"{'='*60}")
 print(f"Model: {model_path}")
 print(f"Camera: /dev/video{args.camera}")
@@ -189,7 +189,7 @@ print("Initializing GPIO...")
 GPIO.setmode(GPIO.BCM)
 GPIO.setwarnings(False)
 GPIO.setup(IR_SENSOR_PIN, GPIO.IN)
-print("✅ GPIO initialized")
+print("âœ… GPIO initialized")
 
 # Initialize pigpio for servo control
 print("Initializing servo control...")
@@ -231,22 +231,22 @@ try:
     esp32_serial.reset_input_buffer()
     esp32_serial.reset_output_buffer()
     
-    print(f"✅ Serial connection to ESP32 established successfully")
+    print(f"âœ… Serial connection to ESP32 established successfully")
     print(f"   Port: {args.esp32_port}")
     print(f"   Baud: 115200")
     print(f"   Mode: Non-blocking (DTR/RTS disabled)")
     
 except serial.SerialException as e:
-    print(f"❌ Serial connection failed: {e}")
+    print(f"âŒ Serial connection failed: {e}")
     print(f"   Please check:")
     print(f"   1. ESP32 is connected to {args.esp32_port}")
     print(f"   2. User has permissions (run: sudo usermod -a -G dialout $USER)")
     print(f"   3. No other program is using the port")
-    print("⚠️  Continuing without ESP32 serial communication...")
+    print("âš ï¸  Continuing without ESP32 serial communication...")
     esp32_serial = None
 except Exception as e:
-    print(f"❌ Unexpected error initializing serial: {e}")
-    print("⚠️  Continuing without ESP32 serial communication...")
+    print(f"âŒ Unexpected error initializing serial: {e}")
+    print("âš ï¸  Continuing without ESP32 serial communication...")
     esp32_serial = None
 
 # Initialize I2C LCD Display
@@ -265,7 +265,7 @@ else:
     print("LCD display not available - continuing without LCD")
 
 # Load the model into memory and get labelmap
-print(f"\n⏳ Loading YOLO model: {model_path}")
+print(f"\nâ³ Loading YOLO model: {model_path}")
 print("   This may take 10-30 seconds depending on model size...")
 if lcd.enabled:
     lcd.display_lines(
@@ -278,7 +278,7 @@ model_load_start = time.time()
 model = YOLO(model_path, task='detect')
 labels = model.names
 model_load_time = time.time() - model_load_start
-print(f"✅ Model loaded successfully in {model_load_time:.2f} seconds")
+print(f"âœ… Model loaded successfully in {model_load_time:.2f} seconds")
 print(f"   Detected classes: {list(labels.values())}")
 if lcd.enabled:
     lcd.display_lines(
@@ -322,10 +322,10 @@ def set_servo_angle(angle):
 
 def release_chit():
     """Release chit by moving servo to release position and back"""
-    print(f"Releasing chit: Moving servo from {SERVO_INITIAL_ANGLE}° to {SERVO_RELEASE_ANGLE}°")
+    print(f"Releasing chit: Moving servo from {SERVO_INITIAL_ANGLE}Â° to {SERVO_RELEASE_ANGLE}Â°")
     set_servo_angle(SERVO_RELEASE_ANGLE)
     time.sleep(2)  # Hold for 2 seconds
-    print(f"Returning servo to initial position {SERVO_INITIAL_ANGLE}°")
+    print(f"Returning servo to initial position {SERVO_INITIAL_ANGLE}Â°")
     set_servo_angle(SERVO_INITIAL_ANGLE)
 
 def send_to_esp32(message):
@@ -340,16 +340,16 @@ def send_to_esp32(message):
             esp32_serial.write(full_message.encode('utf-8'))
             esp32_serial.flush()  # Ensure data is sent immediately
             
-            print(f"✅ Sent to ESP32: {message}")
+            print(f"âœ… Sent to ESP32: {message}")
             return True
         except serial.SerialException as e:
-            print(f"❌ Serial error sending to ESP32: {e}")
+            print(f"âŒ Serial error sending to ESP32: {e}")
             return False
         except Exception as e:
-            print(f"❌ Error sending to ESP32: {e}")
+            print(f"âŒ Error sending to ESP32: {e}")
             return False
     else:
-        print(f"⚠️  Cannot send '{message}' - Serial not connected")
+        print(f"âš ï¸  Cannot send '{message}' - Serial not connected")
         return False
 
 def read_from_esp32():
@@ -365,7 +365,7 @@ def read_from_esp32():
                 if message:
                     # Filter out debug messages (keep only important ones)
                     if message.startswith("DISPENSING_COMPLETE"):
-                        print(f"📨 ESP32: {message}")
+                        print(f"ðŸ“¨ ESP32: {message}")
                         
                         # Update LCD with completion message
                         lcd.display_lines(
@@ -381,20 +381,20 @@ def read_from_esp32():
                             "",
                             ""
                         )
-                    elif message.startswith("✅") or message.startswith("❌") or message.startswith("⚠️"):
+                    elif message.startswith("âœ…") or message.startswith("âŒ") or message.startswith("âš ï¸"):
                         # Important status messages
-                        print(f"📨 ESP32: {message}")
+                        print(f"ðŸ“¨ ESP32: {message}")
                     elif "AUTO_DISPENSE" in message or "SYSTEM BUSY" in message:
                         # Important operational messages
-                        print(f"📨 ESP32: {message}")
+                        print(f"ðŸ“¨ ESP32: {message}")
                     
                     return message
         except serial.SerialException as e:
-            print(f"❌ Serial exception reading from ESP32: {e}")
+            print(f"âŒ Serial exception reading from ESP32: {e}")
         except UnicodeDecodeError as e:
-            print(f"⚠️  Decode error reading from ESP32: {e}")
+            print(f"âš ï¸  Decode error reading from ESP32: {e}")
         except Exception as e:
-            print(f"❌ Unexpected error reading from ESP32: {e}")
+            print(f"âŒ Unexpected error reading from ESP32: {e}")
     return None
 
 def is_ir_detected():
@@ -403,7 +403,7 @@ def is_ir_detected():
 
 # Initialize servo to home position
 set_servo_angle(SERVO_INITIAL_ANGLE)
-print(f"Servo initialized to {SERVO_INITIAL_ANGLE}°")
+print(f"Servo initialized to {SERVO_INITIAL_ANGLE}Â°")
 
 # Initialize USB webcam connection
 cap = cv2.VideoCapture(img_source)
@@ -515,7 +515,7 @@ def get_confirmed_detection():
 
 # Begin YOLO detection using USB webcam
 print(f"\n{'='*60}")
-print("✅ SYSTEM INITIALIZATION COMPLETE")
+print("âœ… SYSTEM INITIALIZATION COMPLETE")
 print(f"{'='*60}")
 print(f"Camera: USB webcam at /dev/video{args.camera}")
 print(f"IR Sensor: GPIO {IR_SENSOR_PIN}")
@@ -524,7 +524,7 @@ print(f"Detection mode: Real-time continuous detection")
 print(f"Confirmation frames: {CONFIRMATION_FRAMES}")
 print(f"Confidence threshold: {CONFIDENCE_THRESHOLD}")
 print(f"{'='*60}")
-print("\n🎉 System ready for operation!")
+print("\nðŸŽ‰ System ready for operation!")
 print("Real-time detection running. Insert chit when ready.")
 print("Waiting for chit insertion...\n")
 
@@ -564,7 +564,7 @@ while True:
     # Capture and process frame continuously
     ret, frame = cap.read()
     if not ret or frame is None:
-        print("❌ Failed to capture frame")
+        print("âŒ Failed to capture frame")
         time.sleep(0.1)
         continue
     
@@ -601,7 +601,7 @@ while True:
         # Check if IR sensor triggered
         if ir_detected and not last_ir_state and detection_enabled:
             print(f"\n{'='*60}")
-            print(f"🔍 IR SENSOR TRIGGERED - STARTING DETECTION")
+            print(f"ðŸ” IR SENSOR TRIGGERED - STARTING DETECTION")
             print(f"{'='*60}")
             
             send_to_esp32("IR_DETECTED")
@@ -639,7 +639,7 @@ while True:
         if detected_chits:
             best_detection = max(detected_chits, key=lambda x: x[1])
             detection_buffer.append(best_detection)
-            print(f"   Frame detection: ₱{best_detection[0]} | Conf: {best_detection[1]:.2%}")
+            print(f"   Frame detection: â‚±{best_detection[0]} | Conf: {best_detection[1]:.2%}")
         else:
             # Add None to buffer if no detection
             detection_buffer.append((None, 0.0))
@@ -653,9 +653,9 @@ while True:
         
         if confirmed_value:
             print(f"\n{'='*60}")
-            print(f"✅ DETECTION CONFIRMED!")
+            print(f"âœ… DETECTION CONFIRMED!")
             print(f"{'='*60}")
-            print(f"   Detected Value: ₱{confirmed_value}")
+            print(f"   Detected Value: â‚±{confirmed_value}")
             print(f"   Average Confidence: {avg_conf:.2%}")
             print(f"   Frames analyzed: {len(detection_buffer)}")
             print(f"{'='*60}")
@@ -667,7 +667,7 @@ while True:
         # Timeout if no IR detection after some time
         elif not ir_detected and (time.perf_counter() - t_detect_start) > 3.0:
             print(f"\n{'='*60}")
-            print(f"❌ DETECTION TIMEOUT - No consistent detection")
+            print(f"âŒ DETECTION TIMEOUT - No consistent detection")
             print(f"{'='*60}")
             
             send_to_esp32("DETECTION_TIMEOUT")
@@ -697,9 +697,9 @@ while True:
         detection_time = t_detect_stop - t_detect_start
         
         print(f"\n{'='*60}")
-        print(f"🎉 DETECTION COMPLETE")
+        print(f"ðŸŽ‰ DETECTION COMPLETE")
         print(f"{'='*60}")
-        print(f"   Detected Value: ₱{confirmed_chit_value}")
+        print(f"   Detected Value: â‚±{confirmed_chit_value}")
         print(f"   Confidence: {confirmed_confidence:.2%}")
         print(f"   Detection Time: {detection_time:.3f}s")
         print(f"{'='*60}")
@@ -716,13 +716,13 @@ while True:
         send_to_esp32(f"CHIT_DETECTED:{confirmed_chit_value}")
         
         # Release the chit
-        print(f"🔓 Releasing chit via servo...")
+        print(f"ðŸ”“ Releasing chit via servo...")
         release_chit()
-        print(f"✅ Chit ₱{confirmed_chit_value} released successfully")
+        print(f"âœ… Chit â‚±{confirmed_chit_value} released successfully")
         
         # Auto-dispense: Send command to ESP32 to dispense detected amount
         print(f"\n{'='*60}")
-        print(f"🪙 AUTO-DISPENSING TRIGGERED")
+        print(f"ðŸª™ AUTO-DISPENSING TRIGGERED")
         print(f"{'='*60}")
         print(f"   Sending to ESP32: AUTO_DISPENSE:{confirmed_chit_value}")
         print(f"   Expected dispensing:")
@@ -751,7 +751,7 @@ while True:
             )
             time.sleep(3)
         else:
-            print(f"⚠️  Failed to send AUTO_DISPENSE command")
+            print(f"âš ï¸  Failed to send AUTO_DISPENSE command")
             lcd.display_lines(
                 "ERROR!",
                 "Communication",
@@ -811,3 +811,4 @@ cap.release()
 if record: recorder.release()
 
 print("System shutdown complete.")
+
