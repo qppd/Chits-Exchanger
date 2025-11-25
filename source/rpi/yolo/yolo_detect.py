@@ -124,65 +124,6 @@ class LCD:
         if line4:
             self.lcd_string(line4, LCD_LINE_4)
 
-# Auto-detection functions
-def find_usb_cameras():
-    """Automatically detect available USB cameras"""
-    print("\n🔍 Scanning for USB cameras...")
-    available_cameras = []
-    
-    # Check /dev/video* devices
-    for i in range(10):  # Check video0 to video9
-        cap = cv2.VideoCapture(i)
-        if cap.isOpened():
-            ret, frame = cap.read()
-            if ret:
-                available_cameras.append(i)
-                print(f"   ✅ Found camera at /dev/video{i}")
-            cap.release()
-    
-    if not available_cameras:
-        print("   ❌ No USB cameras found")
-        return None
-    
-    # Return the first available camera
-    selected = available_cameras[0]
-    print(f"   📷 Selected: /dev/video{selected}")
-    return selected
-
-def find_esp32_port():
-    """Automatically detect ESP32 serial port"""
-    print("\n🔍 Scanning for ESP32 serial port...")
-    
-    import serial.tools.list_ports
-    
-    # List all available serial ports
-    ports = serial.tools.list_ports.comports()
-    
-    if not ports:
-        print("   ❌ No serial ports found")
-        return None
-    
-    # Look for common ESP32 identifiers
-    esp32_keywords = ['CP210', 'CH340', 'USB', 'UART', 'Serial']
-    
-    for port in ports:
-        port_info = f"{port.device} - {port.description} - {port.manufacturer}"
-        print(f"   Found: {port_info}")
-        
-        # Check if it matches ESP32 patterns
-        for keyword in esp32_keywords:
-            if keyword.lower() in port_info.lower():
-                print(f"   ✅ ESP32 detected at: {port.device}")
-                return port.device
-    
-    # If no match found, use first available port
-    if ports:
-        selected = ports[0].device
-        print(f"   ⚠️  No ESP32 pattern matched, using first port: {selected}")
-        return selected
-    
-    return None
-
 # Determine if GUI is available (e.g., from terminal or desktop session)
 use_gui = "DISPLAY" in os.environ
 
@@ -197,33 +138,15 @@ parser.add_argument('--resolution', help='Resolution in WxH to display inference
                     default=None)
 parser.add_argument('--record', help='Record results from video or webcam and save it as "demo1.avi". Must specify --resolution argument to record.',
                     action='store_true')
-parser.add_argument('--esp32_port', help='Serial port for ESP32 communication (example: "/dev/ttyUSB0"). If not specified, will auto-detect.',
-                    default=None)
-parser.add_argument('--camera', help='USB camera device ID (example: "0" for /dev/video0). If not specified, will auto-detect.',
-                    default=None)
+parser.add_argument('--esp32_port', help='Serial port for ESP32 communication (example: "/dev/ttyUSB0")',
+                    default='/dev/ttyUSB0')
+parser.add_argument('--camera', help='USB camera device ID (example: "0" for /dev/video0)',
+                    default='0')
 
 args = parser.parse_args()
 
-# Auto-detect camera if not specified
-if args.camera is None:
-    detected_camera = find_usb_cameras()
-    if detected_camera is None:
-        print("❌ No camera found. Please connect a USB camera and try again.")
-        sys.exit(1)
-    img_source = detected_camera
-else:
-    img_source = int(args.camera)
-
-# Auto-detect ESP32 port if not specified
-if args.esp32_port is None:
-    detected_port = find_esp32_port()
-    if detected_port is None:
-        print("⚠️  No ESP32 port found. System will run without ESP32 communication.")
-        esp32_port = None
-    else:
-        esp32_port = detected_port
-else:
-    esp32_port = args.esp32_port
+# USB camera device
+img_source = int(args.camera)
 
 # GPIO Pin Configurations for RPi
 IR_SENSOR_PIN = 17  # IR sensor input
@@ -251,8 +174,8 @@ print(f"\n{'='*60}")
 print(f"🚀 CHIT DETECTION SYSTEM - STARTUP")
 print(f"{'='*60}")
 print(f"Model: {model_path}")
-print(f"Camera: /dev/video{img_source} {'(auto-detected)' if args.camera is None else ''}")
-print(f"ESP32 Port: {esp32_port if esp32_port else 'Not connected'} {'(auto-detected)' if args.esp32_port is None else ''}")
+print(f"Camera: /dev/video{args.camera}")
+print(f"ESP32 Port: {args.esp32_port}")
 print(f"{'='*60}\n")
 
 # Parse user-specified display resolution
@@ -277,15 +200,12 @@ if not pi.connected:
 
 # Initialize serial communication with ESP32
 try:
-    if esp32_port is None:
-        raise serial.SerialException("No ESP32 port available")
-    
-    print(f"Initializing serial connection to ESP32 on {esp32_port}...")
+    print(f"Initializing serial connection to ESP32 on {args.esp32_port}...")
     
     # Open serial port with proper settings
     # IMPORTANT: Disable DTR/RTS to prevent ESP32 auto-reset
     esp32_serial = serial.Serial()
-    esp32_serial.port = esp32_port
+    esp32_serial.port = args.esp32_port
     esp32_serial.baudrate = 115200
     esp32_serial.timeout = 0.01  # Very short timeout for non-blocking reads
     esp32_serial.write_timeout = 1.0  # 1 second write timeout
@@ -312,14 +232,14 @@ try:
     esp32_serial.reset_output_buffer()
     
     print(f"✅ Serial connection to ESP32 established successfully")
-    print(f"   Port: {esp32_port}")
+    print(f"   Port: {args.esp32_port}")
     print(f"   Baud: 115200")
     print(f"   Mode: Non-blocking (DTR/RTS disabled)")
     
 except serial.SerialException as e:
     print(f"❌ Serial connection failed: {e}")
     print(f"   Please check:")
-    print(f"   1. ESP32 is connected to {esp32_port if esp32_port else 'a USB port'}")
+    print(f"   1. ESP32 is connected to {args.esp32_port}")
     print(f"   2. User has permissions (run: sudo usermod -a -G dialout $USER)")
     print(f"   3. No other program is using the port")
     print("⚠️  Continuing without ESP32 serial communication...")
@@ -408,57 +328,6 @@ def release_chit():
     print(f"Returning servo to initial position {SERVO_INITIAL_ANGLE}°")
     set_servo_angle(SERVO_INITIAL_ANGLE)
 
-def reconnect_esp32():
-    """Attempt to reconnect to ESP32 after connection loss"""
-    global esp32_serial
-    
-    print("\n🔄 Attempting to reconnect to ESP32...")
-    
-    try:
-        if esp32_port is None:
-            print("❌ No ESP32 port configured")
-            return False
-        
-        # Check if port still exists physically
-        if not os.path.exists(esp32_port):
-            print(f"❌ Port {esp32_port} no longer exists (device unplugged?)")
-            print("⚠️  Please reconnect ESP32 and restart the system")
-            esp32_serial = None
-            return False
-        
-        # Close existing connection if open
-        if esp32_serial and esp32_serial.is_open:
-            esp32_serial.close()
-            time.sleep(0.5)
-        
-        # Reinitialize serial connection
-        esp32_serial = serial.Serial()
-        esp32_serial.port = esp32_port
-        esp32_serial.baudrate = 115200
-        esp32_serial.timeout = 0.01
-        esp32_serial.write_timeout = 1.0
-        esp32_serial.bytesize = serial.EIGHTBITS
-        esp32_serial.parity = serial.PARITY_NONE
-        esp32_serial.stopbits = serial.STOPBITS_ONE
-        esp32_serial.dtr = False
-        esp32_serial.rts = False
-        
-        esp32_serial.open()
-        esp32_serial.dtr = False
-        esp32_serial.rts = False
-        
-        time.sleep(0.5)
-        esp32_serial.reset_input_buffer()
-        esp32_serial.reset_output_buffer()
-        
-        print("✅ ESP32 reconnected successfully")
-        return True
-        
-    except Exception as e:
-        print(f"❌ Reconnection failed: {e}")
-        esp32_serial = None
-        return False
-
 def send_to_esp32(message):
     """Send message to ESP32 via serial with proper formatting and error handling"""
     if esp32_serial and esp32_serial.is_open:
@@ -473,22 +342,11 @@ def send_to_esp32(message):
             
             print(f"✅ Sent to ESP32: {message}")
             return True
-        except (serial.SerialException, OSError) as e:
-            print(f"❌ Error sending to ESP32: {e}")
-            # Try to reconnect on I/O error
-            if reconnect_esp32():
-                # Retry sending after reconnect
-                try:
-                    full_message = message + '\n'
-                    esp32_serial.write(full_message.encode('utf-8'))
-                    esp32_serial.flush()
-                    print(f"✅ Sent to ESP32 (after reconnect): {message}")
-                    return True
-                except:
-                    return False
+        except serial.SerialException as e:
+            print(f"❌ Serial error sending to ESP32: {e}")
             return False
         except Exception as e:
-            print(f"❌ Unexpected error sending to ESP32: {e}")
+            print(f"❌ Error sending to ESP32: {e}")
             return False
     else:
         print(f"⚠️  Cannot send '{message}' - Serial not connected")
@@ -531,10 +389,8 @@ def read_from_esp32():
                         print(f"📨 ESP32: {message}")
                     
                     return message
-        except (serial.SerialException, OSError) as e:
-            print(f"❌ I/O error reading from ESP32: {e}")
-            # Attempt reconnection on I/O error
-            reconnect_esp32()
+        except serial.SerialException as e:
+            print(f"❌ Serial exception reading from ESP32: {e}")
         except UnicodeDecodeError as e:
             print(f"⚠️  Decode error reading from ESP32: {e}")
         except Exception as e:
@@ -549,8 +405,20 @@ def is_ir_detected():
 set_servo_angle(SERVO_INITIAL_ANGLE)
 print(f"Servo initialized to {SERVO_INITIAL_ANGLE}°")
 
-# Camera will be opened only when needed (on IR trigger)
-print(f"Camera will be initialized on demand (USB /dev/video{args.camera})")
+# Initialize USB webcam connection
+cap = cv2.VideoCapture(img_source)
+
+# Set camera resolution if specified by user
+if user_res:
+    ret = cap.set(3, resW)
+    ret = cap.set(4, resH)
+
+# Check if connection is successful
+if not cap.isOpened():
+    print(f"Failed to open USB camera /dev/video{args.camera}")
+    sys.exit(1)
+
+print("Successfully connected to USB webcam")
 
 # Set bounding box colors (using the Tableu 10 color scheme)
 bbox_colors = [(164,120,87), (68,148,228), (93,97,209), (178,182,133), (88,159,106), 
@@ -559,184 +427,118 @@ bbox_colors = [(164,120,87), (68,148,228), (93,97,209), (178,182,133), (88,159,1
 # Detection state variables
 last_ir_state = False
 detection_enabled = False  # Flag to enable/disable detection
-NUM_CAPTURE_IMAGES = 3  # Number of images to capture and analyze
-CAPTURE_DELAY = 0.1  # Delay between captures (seconds)
-DISPLAY_TIME = 3  # Time to display each captured image (seconds)
+
+# Real-time detection tracking
+CONFIRMATION_FRAMES = 5  # Number of consecutive frames needed to confirm detection
+CONFIDENCE_THRESHOLD = 0.5  # Minimum confidence for detection
+detection_buffer = []  # Buffer to store recent detections
+
+# FPS tracking
+frame_count = 0
+fps_start_time = time.time()
+fps = 0.0
 
 
-# Helper function to capture and analyze images
-def capture_and_detect():
-    """Run real-time chit detection until valid chit is found"""
-    print(f"\n{'='*60}")
-    print(f"📹 STARTING REAL-TIME CHIT DETECTION")
-    print(f"{'='*60}")
+# Helper function for real-time detection with frame processing
+def process_frame_detection(frame):
+    """Process a single frame and return detection results"""
+    # Run inference
+    results = model(frame, verbose=False)
+    detections = results[0].boxes
+    
+    detected_chits = []
+    display_frame = frame.copy()
+    
+    # Process detections and draw on frame
+    for i in range(len(detections)):
+        conf = detections[i].conf.item()
+        
+        if conf > CONFIDENCE_THRESHOLD:
+            classidx = int(detections[i].cls.item())
+            classname = labels[classidx]
+            
+            # Get bounding box coordinates
+            xyxy_tensor = detections[i].xyxy.cpu()
+            xyxy = xyxy_tensor.numpy().squeeze()
+            xmin, ymin, xmax, ymax = xyxy.astype(int)
+            
+            # Draw bounding box
+            color = bbox_colors[classidx % 10]
+            cv2.rectangle(display_frame, (xmin, ymin), (xmax, ymax), color, 2)
+            
+            # Draw label
+            label = f'{classname}: {int(conf*100)}%'
+            labelSize, baseLine = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)
+            label_ymin = max(ymin, labelSize[1] + 10)
+            cv2.rectangle(display_frame, (xmin, label_ymin-labelSize[1]-10), 
+                        (xmin+labelSize[0], label_ymin+baseLine-10), color, cv2.FILLED)
+            cv2.putText(display_frame, label, (xmin, label_ymin-7), 
+                      cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 2)
+            
+            try:
+                chit_value = int(classname)
+                if chit_value in VALID_CHITS:
+                    detected_chits.append((chit_value, conf))
+            except ValueError:
+                pass
+    
+    return display_frame, detected_chits
 
-    # Open camera
-    print("Opening camera...")
-    cap = cv2.VideoCapture(img_source)
 
-    # Set camera resolution if specified by user
-    if user_res:
-        cap.set(3, resW)
-        cap.set(4, resH)
-
-    # Check if connection is successful
-    if not cap.isOpened():
-        print(f"❌ Failed to open USB camera /dev/video{img_source}")
-        if lcd.enabled:
-            lcd.display_lines(
-                "ERROR!",
-                "Camera failed",
-                "to open",
-                ""
-            )
-        return None, 0.0, 0.0
-
-    print("✅ Camera opened successfully")
-
-    # Let camera warm up and stabilize
-    time.sleep(1.0)
-
-    # Flush first few frames (often corrupted)
-    for _ in range(3):
-        cap.read()
-
-    print("Camera ready for real-time detection")
-    print("Press 'q' to cancel detection")
-
-    t_detect_start = time.perf_counter()
-    detection_timeout = 30  # 30 seconds timeout
-    last_detection_time = 0
-    detection_cooldown = 2  # 2 seconds between detections
-
-    while True:
-        # Check for timeout
-        current_time = time.perf_counter()
-        if current_time - t_detect_start > detection_timeout:
-            print("⏰ Detection timeout - no chit detected")
-            break
-
-        # Capture frame
-        ret, frame = cap.read()
-        if not ret or frame is None:
-            print("❌ Failed to capture frame")
-            time.sleep(0.1)
-            continue
-
-        # Resize if needed
-        if resize:
-            frame = cv2.resize(frame, (resW, resH))
-
-        # Store original frame for display
-        display_frame = frame.copy()
-
-        # Run inference
-        results = model(frame, verbose=False)
-        detections = results[0].boxes
-
-        # Process detections and draw on frame
-        detected_chit = None
-        detected_conf = 0.0
-
-        for i in range(len(detections)):
-            conf = detections[i].conf.item()
-
-            if conf > 0.5:  # Minimum confidence threshold
-                classidx = int(detections[i].cls.item())
-                classname = labels[classidx]
-
-                # Get bounding box coordinates
-                xyxy_tensor = detections[i].xyxy.cpu()
-                xyxy = xyxy_tensor.numpy().squeeze()
-                xmin, ymin, xmax, ymax = xyxy.astype(int)
-
-                # Draw bounding box
-                color = bbox_colors[classidx % 10]
-                cv2.rectangle(display_frame, (xmin, ymin), (xmax, ymax), color, 2)
-
-                # Draw label
-                label = f'{classname}: {int(conf*100)}%'
-                labelSize, baseLine = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)
-                label_ymin = max(ymin, labelSize[1] + 10)
-                cv2.rectangle(display_frame, (xmin, label_ymin-labelSize[1]-10),
-                            (xmin+labelSize[0], label_ymin+baseLine-10), color, cv2.FILLED)
-                cv2.putText(display_frame, label, (xmin, label_ymin-7),
-                          cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 2)
-
-                try:
-                    chit_value = int(classname)
-                    if chit_value in VALID_CHITS and conf > detected_conf:
-                        detected_chit = chit_value
-                        detected_conf = conf
-                except ValueError:
-                    pass
-
-        # Add status text to frame
-        status_text = f"Real-time Detection - {int(current_time - t_detect_start)}s"
-        cv2.putText(display_frame, status_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
-
-        if detected_chit:
-            result_text = f"DETECTED: P{detected_chit} ({int(detected_conf*100)}%)"
-            cv2.putText(display_frame, result_text, (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
-
-            # Check if enough time has passed since last detection
-            if current_time - last_detection_time > detection_cooldown:
-                print(f"\n🎯 CHIT DETECTED: ₱{detected_chit} | Confidence: {detected_conf:.2%}")
-
-                # Show final frame for 2 seconds
-                cv2.imshow('Chit Detection - Real-time', display_frame)
-                cv2.waitKey(2000)
-                cv2.destroyWindow('Chit Detection - Real-time')
-
-                # Close camera
-                cap.release()
-                print("✅ Camera closed - resources freed")
-
-                t_detect_stop = time.perf_counter()
-                detection_time = t_detect_stop - t_detect_start
-
-                return detected_chit, detected_conf, detection_time
-
-        # Show the frame
-        cv2.imshow('Chit Detection - Real-time', display_frame)
-
-        # Check for quit key
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            print("❌ Detection cancelled by user")
-            break
-
-    # Close camera if we exit the loop
-    cap.release()
-    cv2.destroyWindow('Chit Detection - Real-time')
-    print("✅ Camera closed - resources freed")
-
-    return None, 0.0, 0.0
+def get_confirmed_detection():
+    """Analyze detection buffer and return confirmed chit value if consistent"""
+    if len(detection_buffer) < CONFIRMATION_FRAMES:
+        return None, 0.0
+    
+    # Count occurrences of each detected value in recent frames
+    value_counts = {}
+    value_confidences = {}
+    
+    for chit_value, conf in detection_buffer[-CONFIRMATION_FRAMES:]:
+        if chit_value not in value_counts:
+            value_counts[chit_value] = 0
+            value_confidences[chit_value] = []
+        value_counts[chit_value] += 1
+        value_confidences[chit_value].append(conf)
+    
+    # Find most common value
+    if value_counts:
+        most_common_value = max(value_counts.items(), key=lambda x: x[1])
+        chit_value, count = most_common_value
+        
+        # Require majority of frames to agree
+        if count >= CONFIRMATION_FRAMES * 0.6:  # 60% threshold
+            avg_confidence = sum(value_confidences[chit_value]) / len(value_confidences[chit_value])
+            return chit_value, avg_confidence
+    
+    return None, 0.0
 
 # Begin YOLO detection using USB webcam
 print(f"\n{'='*60}")
 print("✅ SYSTEM INITIALIZATION COMPLETE")
 print(f"{'='*60}")
-print(f"Camera: USB webcam at /dev/video{img_source}")
+print(f"Camera: USB webcam at /dev/video{args.camera}")
 print(f"IR Sensor: GPIO {IR_SENSOR_PIN}")
 print(f"Servo: GPIO {SERVO_PIN}")
-print(f"Detection mode: Real-time detection")
-print(f"Timeout: 30 seconds per detection")
+print(f"Detection mode: Real-time continuous detection")
+print(f"Confirmation frames: {CONFIRMATION_FRAMES}")
+print(f"Confidence threshold: {CONFIDENCE_THRESHOLD}")
 print(f"{'='*60}")
 print("\n🎉 System ready for operation!")
-print("Detection will start automatically when IR sensor is triggered.")
+print("Real-time detection running. Insert chit when ready.")
 print("Waiting for chit insertion...\n")
 
 # Update LCD to ready state
 if lcd.enabled:
     lcd.display_lines(
         "System Ready!",
-        "Insert chit to",
-        "start exchange",
+        "Real-time mode",
+        "Insert chit",
         ""
     )
     time.sleep(2)
     lcd.display_lines(
-        "Ready",
+        "Ready - Scanning",
         "Waiting for chit...",
         "",
         ""
@@ -745,7 +547,13 @@ if lcd.enabled:
 # Enable detection flag after loading
 detection_enabled = True
 
-# Begin monitoring loop
+# State machine for detection
+detection_state = "WAITING"  # WAITING, DETECTING, CONFIRMED, DISPENSING
+confirmed_chit_value = None
+confirmed_confidence = 0.0
+
+# Begin monitoring loop with real-time detection
+print("Starting real-time detection loop...")
 while True:
     
     # Check for messages from ESP32
@@ -753,108 +561,202 @@ while True:
     if esp32_msg:
         print(f"ESP32: {esp32_msg}")
     
+    # Capture and process frame continuously
+    ret, frame = cap.read()
+    if not ret or frame is None:
+        print("❌ Failed to capture frame")
+        time.sleep(0.1)
+        continue
+    
+    # Resize if needed
+    if resize:
+        frame = cv2.resize(frame, (resW, resH))
+    
+    # Calculate FPS
+    frame_count += 1
+    if frame_count % 30 == 0:
+        fps_end_time = time.time()
+        fps = 30 / (fps_end_time - fps_start_time)
+        fps_start_time = fps_end_time
+    
     # Check IR sensor state
     ir_detected = is_ir_detected()
     
-    # Start detection when IR sensor is triggered (rising edge) AND detection is enabled
-    if ir_detected and not last_ir_state and detection_enabled:
-        print(f"\n{'='*60}")
-        print(f"🔍 IR SENSOR TRIGGERED - CHIT DETECTED")
-        print(f"{'='*60}")
+    # State machine logic
+    if detection_state == "WAITING":
+        # Process frame for real-time detection
+        display_frame, detected_chits = process_frame_detection(frame)
         
-        send_to_esp32("IR_DETECTED")
+        # Add FPS and status to display
+        cv2.putText(display_frame, f'FPS: {fps:.1f}', (10, 30), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+        cv2.putText(display_frame, 'Status: Waiting', (10, 60), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
         
-        # Update LCD
-        lcd.display_lines(
-            "IR DETECTED!",
-            "Capturing images...",
-            "Please wait...",
-            ""
-        )
+        # Show real-time view
+        if use_gui:
+            cv2.imshow('Chit Detection - Real-time', display_frame)
+            cv2.waitKey(1)
         
-        # Capture and detect
-        detected_chit_value, detection_confidence, detection_time = capture_and_detect()
-        
-        if detected_chit_value:
+        # Check if IR sensor triggered
+        if ir_detected and not last_ir_state and detection_enabled:
             print(f"\n{'='*60}")
-            print(f"🎉 DETECTION COMPLETE")
+            print(f"🔍 IR SENSOR TRIGGERED - STARTING DETECTION")
             print(f"{'='*60}")
-            print(f"   Detected Value: ₱{detected_chit_value}")
-            print(f"   Confidence: {detection_confidence:.2%}")
-            print(f"   Detection Time: {detection_time:.3f}s")
-            print(f"{'='*60}")
+            
+            send_to_esp32("IR_DETECTED")
             
             # Update LCD
             lcd.display_lines(
-                "DETECTED!",
-                f"Value: P{detected_chit_value}",
-                f"Conf: {int(detection_confidence*100)}%",
-                "Releasing chit..."
+                "IR DETECTED!",
+                "Detecting chit...",
+                "Hold steady...",
+                ""
             )
             
-            # Send detection result to ESP32
-            send_to_esp32(f"CHIT_DETECTED:{detected_chit_value}")
-            
-            # Release the chit
-            print(f"🔓 Releasing chit via servo...")
-            release_chit()
-            print(f"✅ Chit ₱{detected_chit_value} released successfully")
-            
-            # Auto-dispense: Send command to ESP32 to dispense detected amount
-            print(f"\n{'='*60}")
-            print(f"🪙 AUTO-DISPENSING TRIGGERED")
-            print(f"{'='*60}")
-            print(f"   Sending to ESP32: AUTO_DISPENSE:{detected_chit_value}")
-            print(f"   Expected dispensing:")
-            
-            # Show expected coin breakdown
-            if detected_chit_value == 5:
-                print(f"     - 1 x 5 PHP coin (Hopper 1)")
-            elif detected_chit_value == 10:
-                print(f"     - 1 x 10 PHP coin (Hopper 2)")
-            elif detected_chit_value == 20:
-                print(f"     - 1 x 20 PHP coin (Hopper 3)")
-            elif detected_chit_value == 50:
-                print(f"     - 2 x 20 PHP coins (Hopper 3)")
-                print(f"     - 1 x 10 PHP coin (Hopper 2)")
-            
-            print(f"{'='*60}\n")
-            
-            # Send the command
-            if send_to_esp32(f"AUTO_DISPENSE:{detected_chit_value}"):
-                # Update LCD
-                lcd.display_lines(
-                    "AUTO DISPENSE!",
-                    f"Chit: P{detected_chit_value}",
-                    "Dispensing...",
-                    "Please wait"
-                )
-                time.sleep(3)
-            else:
-                print(f"⚠️  Failed to send AUTO_DISPENSE command")
-                lcd.display_lines(
-                    "ERROR!",
-                    "Communication",
-                    "failed",
-                    ""
-                )
-                time.sleep(2)
-                
+            detection_state = "DETECTING"
+            detection_buffer.clear()
+            t_detect_start = time.perf_counter()
+    
+    elif detection_state == "DETECTING":
+        # Process frame for detection
+        display_frame, detected_chits = process_frame_detection(frame)
+        
+        # Add FPS and status to display
+        cv2.putText(display_frame, f'FPS: {fps:.1f}', (10, 30), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+        cv2.putText(display_frame, 'Status: Detecting...', (10, 60), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+        cv2.putText(display_frame, f'Buffer: {len(detection_buffer)}/{CONFIRMATION_FRAMES}', 
+                   (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+        
+        # Show real-time view
+        if use_gui:
+            cv2.imshow('Chit Detection - Real-time', display_frame)
+            cv2.waitKey(1)
+        
+        # Add best detection from this frame to buffer
+        if detected_chits:
+            best_detection = max(detected_chits, key=lambda x: x[1])
+            detection_buffer.append(best_detection)
+            print(f"   Frame detection: ₱{best_detection[0]} | Conf: {best_detection[1]:.2%}")
         else:
+            # Add None to buffer if no detection
+            detection_buffer.append((None, 0.0))
+        
+        # Keep buffer size limited
+        if len(detection_buffer) > CONFIRMATION_FRAMES * 2:
+            detection_buffer.pop(0)
+        
+        # Check for confirmed detection
+        confirmed_value, avg_conf = get_confirmed_detection()
+        
+        if confirmed_value:
             print(f"\n{'='*60}")
-            print(f"❌ NO VALID CHIT DETECTED")
+            print(f"✅ DETECTION CONFIRMED!")
             print(f"{'='*60}")
-            print(f"   No valid denomination found in captured images")
-            print(f"{'='*60}\n")
+            print(f"   Detected Value: ₱{confirmed_value}")
+            print(f"   Average Confidence: {avg_conf:.2%}")
+            print(f"   Frames analyzed: {len(detection_buffer)}")
+            print(f"{'='*60}")
+            
+            confirmed_chit_value = confirmed_value
+            confirmed_confidence = avg_conf
+            detection_state = "CONFIRMED"
+        
+        # Timeout if no IR detection after some time
+        elif not ir_detected and (time.perf_counter() - t_detect_start) > 3.0:
+            print(f"\n{'='*60}")
+            print(f"❌ DETECTION TIMEOUT - No consistent detection")
+            print(f"{'='*60}")
             
             send_to_esp32("DETECTION_TIMEOUT")
             
             # Update LCD
             lcd.display_lines(
-                "NO CHIT FOUND!",
+                "TIMEOUT!",
                 "No valid chit",
                 "detected",
                 "Try again..."
+            )
+            time.sleep(2)
+            
+            lcd.display_lines(
+                "Ready - Scanning",
+                "Waiting for chit...",
+                "",
+                ""
+            )
+            
+            detection_state = "WAITING"
+            detection_buffer.clear()
+    
+    elif detection_state == "CONFIRMED":
+        # Detection confirmed, now dispense
+        t_detect_stop = time.perf_counter()
+        detection_time = t_detect_stop - t_detect_start
+        
+        print(f"\n{'='*60}")
+        print(f"🎉 DETECTION COMPLETE")
+        print(f"{'='*60}")
+        print(f"   Detected Value: ₱{confirmed_chit_value}")
+        print(f"   Confidence: {confirmed_confidence:.2%}")
+        print(f"   Detection Time: {detection_time:.3f}s")
+        print(f"{'='*60}")
+        
+        # Update LCD
+        lcd.display_lines(
+            "DETECTED!",
+            f"Value: P{confirmed_chit_value}",
+            f"Conf: {int(confirmed_confidence*100)}%",
+            "Releasing chit..."
+        )
+        
+        # Send detection result to ESP32
+        send_to_esp32(f"CHIT_DETECTED:{confirmed_chit_value}")
+        
+        # Release the chit
+        print(f"🔓 Releasing chit via servo...")
+        release_chit()
+        print(f"✅ Chit ₱{confirmed_chit_value} released successfully")
+        
+        # Auto-dispense: Send command to ESP32 to dispense detected amount
+        print(f"\n{'='*60}")
+        print(f"🪙 AUTO-DISPENSING TRIGGERED")
+        print(f"{'='*60}")
+        print(f"   Sending to ESP32: AUTO_DISPENSE:{confirmed_chit_value}")
+        print(f"   Expected dispensing:")
+        
+        # Show expected coin breakdown
+        if confirmed_chit_value == 5:
+            print(f"     - 1 x 5 PHP coin (Hopper 1)")
+        elif confirmed_chit_value == 10:
+            print(f"     - 1 x 10 PHP coin (Hopper 2)")
+        elif confirmed_chit_value == 20:
+            print(f"     - 1 x 20 PHP coin (Hopper 3)")
+        elif confirmed_chit_value == 50:
+            print(f"     - 2 x 20 PHP coins (Hopper 3)")
+            print(f"     - 1 x 10 PHP coin (Hopper 2)")
+        
+        print(f"{'='*60}\n")
+        
+        # Send the command
+        if send_to_esp32(f"AUTO_DISPENSE:{confirmed_chit_value}"):
+            # Update LCD
+            lcd.display_lines(
+                "AUTO DISPENSE!",
+                f"Chit: P{confirmed_chit_value}",
+                "Dispensing...",
+                "Please wait"
+            )
+            time.sleep(3)
+        else:
+            print(f"⚠️  Failed to send AUTO_DISPENSE command")
+            lcd.display_lines(
+                "ERROR!",
+                "Communication",
+                "failed",
+                ""
             )
             time.sleep(2)
         
@@ -862,16 +764,22 @@ while True:
         
         # Reset LCD to waiting state
         lcd.display_lines(
-            "Ready",
+            "Ready - Scanning",
             "Waiting for chit...",
             "",
             ""
         )
+        
+        # Reset state machine
+        detection_state = "WAITING"
+        detection_buffer.clear()
+        confirmed_chit_value = None
+        confirmed_confidence = 0.0
     
     last_ir_state = ir_detected
     
-    # Small delay to prevent CPU spinning
-    time.sleep(0.05)
+    # Small delay to prevent CPU spinning (very small for real-time)
+    time.sleep(0.01)
 
 # Clean up
 print(f'\nShutting down...')
@@ -899,7 +807,7 @@ if esp32_serial and esp32_serial.is_open:
 # Clear LCD before exit
 lcd.clear()
 
-# Note: Camera is opened/closed on demand, no need to release here
+cap.release()
 if record: recorder.release()
 
 print("System shutdown complete.")
