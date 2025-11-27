@@ -4,6 +4,7 @@ import argparse
 import glob
 import time
 import serial
+import serial.tools.list_ports
 import RPi.GPIO as GPIO
 import pigpio
 import threading
@@ -129,26 +130,73 @@ class LCD:
 # Determine if GUI is available (e.g., from terminal or desktop session)
 use_gui = "DISPLAY" in os.environ
 
+# Auto-detection functions
+def find_camera():
+    """Auto-detect USB camera"""
+    print("Auto-detecting USB camera...")
+    for i in range(10):  # Check /dev/video0 to /dev/video9
+        cap = cv2.VideoCapture(i)
+        if cap.isOpened():
+            ret, frame = cap.read()
+            cap.release()
+            if ret and frame is not None:
+                print(f"✓ Found camera at /dev/video{i}")
+                return i
+    print("✗ No camera found")
+    return None
+
+def find_esp32_port():
+    """Auto-detect ESP32 serial port"""
+    print("Auto-detecting ESP32 serial port...")
+    ports = serial.tools.list_ports.comports()
+    for port in ports:
+        # Look for common ESP32 identifiers
+        if 'USB' in port.device or 'ACM' in port.device or 'ttyUSB' in port.device:
+            try:
+                # Try to open port
+                ser = serial.Serial(port.device, 115200, timeout=1)
+                ser.close()
+                print(f"✓ Found serial port: {port.device}")
+                return port.device
+            except:
+                pass
+    print("✗ No ESP32 serial port found")
+    return None
+
 # Define and parse user input arguments
 parser = argparse.ArgumentParser()
-parser.add_argument('--model', help='Path to YOLO model file (example: "runs/detect/train/weights/best.pt")',
+parser.add_argument('--model', help='Path to YOLO model file',
                     required=True)
-parser.add_argument('--thresh', help='Minimum confidence threshold for displaying detected objects (example: "0.4")',
+parser.add_argument('--thresh', help='Minimum confidence threshold',
                     default=0.5)
-parser.add_argument('--resolution', help='Resolution in WxH to display inference results at (example: "640x480"), \
-                    otherwise, match source resolution',
+parser.add_argument('--resolution', help='Resolution in WxH (example: "320x240")',
                     default=None)
-parser.add_argument('--record', help='Record results from video or webcam and save it as "demo1.avi". Must specify --resolution argument to record.',
+parser.add_argument('--record', help='Record results as demo1.avi',
                     action='store_true')
-parser.add_argument('--esp32_port', help='Serial port for ESP32 communication (example: "/dev/ttyUSB0")',
-                    default='/dev/ttyUSB0')
-parser.add_argument('--camera', help='USB camera device ID (example: "0" for /dev/video0)',
-                    default='0')
+parser.add_argument('--esp32_port', help='Serial port for ESP32 (auto-detect if not specified)',
+                    default=None)
+parser.add_argument('--camera', help='USB camera device ID (auto-detect if not specified)',
+                    default=None)
 
 args = parser.parse_args()
 
-# USB camera device
-img_source = int(args.camera)
+# Auto-detect camera if not specified
+if args.camera is None:
+    camera_id = find_camera()
+    if camera_id is None:
+        print("ERROR: No camera found. Exiting.")
+        sys.exit(1)
+    img_source = camera_id
+else:
+    img_source = int(args.camera)
+
+# Auto-detect ESP32 port if not specified
+if args.esp32_port is None:
+    esp32_port = find_esp32_port()
+    if esp32_port is None:
+        print("WARNING: No ESP32 found. Continuing without serial communication.")
+else:
+    esp32_port = args.esp32_port
 
 # GPIO Pin Configurations for RPi
 IR_SENSOR_PIN = 17  # IR sensor input
@@ -181,11 +229,11 @@ if (not os.path.exists(model_path)):
     sys.exit(0)
 
 print(f"\n{'='*60}")
-print(f"ðŸš€ CHIT DETECTION SYSTEM - STARTUP")
+print(f"CHIT DETECTION SYSTEM - STARTUP")
 print(f"{'='*60}")
 print(f"Model: {model_path}")
-print(f"Camera: /dev/video{args.camera}")
-print(f"ESP32 Port: {args.esp32_port}")
+print(f"Camera: /dev/video{img_source}")
+print(f"ESP32 Port: {esp32_port if esp32_port else 'Not connected'}")
 print(f"{'='*60}\n")
 
 # Parse user-specified display resolution
@@ -209,13 +257,15 @@ if not pi.connected:
     sys.exit(1)
 
 # Initialize serial communication with ESP32
-try:
-    print(f"Initializing serial connection to ESP32 on {args.esp32_port}...")
+esp32_serial = None
+if esp32_port:
+    try:
+        print(f"Initializing serial connection to ESP32 on {esp32_port}...")
     
-    # Open serial port with proper settings
-    # IMPORTANT: Disable DTR/RTS to prevent ESP32 auto-reset
-    esp32_serial = serial.Serial()
-    esp32_serial.port = args.esp32_port
+        # Open serial port with proper settings
+        # IMPORTANT: Disable DTR/RTS to prevent ESP32 auto-reset
+        esp32_serial = serial.Serial()
+        esp32_serial.port = esp32_port
     esp32_serial.baudrate = 115200
     esp32_serial.timeout = 0.01  # Very short timeout for non-blocking reads
     esp32_serial.write_timeout = 1.0  # 1 second write timeout
@@ -241,23 +291,25 @@ try:
     esp32_serial.reset_input_buffer()
     esp32_serial.reset_output_buffer()
     
-    print(f"âœ… Serial connection to ESP32 established successfully")
-    print(f"   Port: {args.esp32_port}")
-    print(f"   Baud: 115200")
-    print(f"   Mode: Non-blocking (DTR/RTS disabled)")
+        print(f"Serial connection to ESP32 established successfully")
+        print(f"   Port: {esp32_port}")
+        print(f"   Baud: 115200")
+        print(f"   Mode: Non-blocking (DTR/RTS disabled)")
     
-except serial.SerialException as e:
-    print(f"âŒ Serial connection failed: {e}")
-    print(f"   Please check:")
-    print(f"   1. ESP32 is connected to {args.esp32_port}")
-    print(f"   2. User has permissions (run: sudo usermod -a -G dialout $USER)")
-    print(f"   3. No other program is using the port")
-    print("âš ï¸  Continuing without ESP32 serial communication...")
-    esp32_serial = None
-except Exception as e:
-    print(f"âŒ Unexpected error initializing serial: {e}")
-    print("âš ï¸  Continuing without ESP32 serial communication...")
-    esp32_serial = None
+    except serial.SerialException as e:
+        print(f"Serial connection failed: {e}")
+        print(f"   Please check:")
+        print(f"   1. ESP32 is connected to {esp32_port}")
+        print(f"   2. User has permissions (run: sudo usermod -a -G dialout $USER)")
+        print(f"   3. No other program is using the port")
+        print("WARNING: Continuing without ESP32 serial communication...")
+        esp32_serial = None
+    except Exception as e:
+        print(f"Unexpected error initializing serial: {e}")
+        print("WARNING: Continuing without ESP32 serial communication...")
+        esp32_serial = None
+else:
+    print("Skipping ESP32 serial initialization (not detected)")
 
 # Initialize I2C LCD Display
 print("\nInitializing LCD display...")
@@ -288,7 +340,7 @@ model_load_start = time.time()
 model = YOLO(model_path, task='detect')
 labels = model.names
 model_load_time = time.time() - model_load_start
-print(f"âœ… Model loaded successfully in {model_load_time:.2f} seconds")
+print(f"Model loaded successfully in {model_load_time:.2f} seconds")
 print(f"   Detected classes: {list(labels.values())}")
 if lcd.enabled:
     lcd.display_lines(
@@ -298,6 +350,65 @@ if lcd.enabled:
         ""
     )
     time.sleep(1)
+
+# Define serial communication thread function
+def serial_communication_thread():
+    """Background thread for handling serial communication with ESP32"""
+    global running, inference_enabled
+    
+    while running:
+        # Handle outgoing messages (non-blocking)
+        try:
+            message = serial_tx_queue.get(timeout=0.01)
+            if esp32_serial and esp32_serial.is_open:
+                try:
+                    esp32_serial.reset_output_buffer()
+                    full_message = message + '\\n'
+                    esp32_serial.write(full_message.encode('utf-8'))
+                    esp32_serial.flush()
+                    print(f"Sent to ESP32: {message}")
+                except Exception as e:
+                    print(f"Error sending: {e}")
+        except Empty:
+            pass
+        
+        # Handle incoming messages (non-blocking)
+        if esp32_serial and esp32_serial.is_open:
+            try:
+                if esp32_serial.in_waiting > 0:
+                    message = esp32_serial.readline().decode('utf-8', errors='ignore').strip()
+                    if message:
+                        serial_rx_queue.put(message)
+                        print(f"ESP32: {message}")
+                        
+                        # Handle special messages
+                        if "DISPENSING_COMPLETE" in message and lcd.enabled:
+                            lcd.display_lines("ESP32:", "Dispensing", "Complete!", "")
+            except Exception as e:
+                if running:
+                    print(f"Error reading: {e}")
+        
+        time.sleep(0.01)
+
+# Start serial communication thread
+if esp32_serial:
+    serial_thread = threading.Thread(target=serial_communication_thread, daemon=True, name="SerialComm")
+    serial_thread.start()
+    print("Serial communication thread started")
+    time.sleep(0.1)
+
+# Helper functions for serial communication
+def send_to_esp32(message):
+    """Queue message to be sent to ESP32 via serial (non-blocking)"""
+    serial_tx_queue.put(message)
+    return True
+
+def read_from_esp32():
+    """Get message from ESP32 queue (non-blocking, returns None if empty)"""
+    try:
+        return serial_rx_queue.get_nowait()
+    except Empty:
+        return None
 
 # Set source type to USB webcam
 source_type = 'usb'
@@ -338,76 +449,6 @@ def release_chit():
     print(f"Returning servo to initial position {SERVO_INITIAL_ANGLE}Â°")
     set_servo_angle(SERVO_INITIAL_ANGLE)
 
-def send_to_esp32(message):
-    """Send message to ESP32 via serial with proper formatting and error handling"""
-    if esp32_serial and esp32_serial.is_open:
-        try:
-            # Clear any pending output first
-            esp32_serial.reset_output_buffer()
-            
-            # Send message with newline terminator
-            full_message = message + '\n'
-            esp32_serial.write(full_message.encode('utf-8'))
-            esp32_serial.flush()  # Ensure data is sent immediately
-            
-            print(f"âœ… Sent to ESP32: {message}")
-            return True
-        except serial.SerialException as e:
-            print(f"âŒ Serial error sending to ESP32: {e}")
-            return False
-        except Exception as e:
-            print(f"âŒ Error sending to ESP32: {e}")
-            return False
-    else:
-        print(f"âš ï¸  Cannot send '{message}' - Serial not connected")
-        return False
-
-def read_from_esp32():
-    """Read messages from ESP32 if available (non-blocking) with proper error handling"""
-    if esp32_serial and esp32_serial.is_open:
-        try:
-            # Check if data is available without blocking
-            if esp32_serial.in_waiting > 0:
-                # Read line with timeout protection
-                message = esp32_serial.readline().decode('utf-8', errors='ignore').strip()
-                
-                # Only process non-empty messages
-                if message:
-                    # Filter out debug messages (keep only important ones)
-                    if message.startswith("DISPENSING_COMPLETE"):
-                        print(f"ðŸ“¨ ESP32: {message}")
-                        
-                        # Update LCD with completion message
-                        lcd.display_lines(
-                            "ESP32:",
-                            "Dispensing",
-                            "Complete!",
-                            ""
-                        )
-                        time.sleep(2)
-                        lcd.display_lines(
-                            "Ready",
-                            "Waiting for chit...",
-                            "",
-                            ""
-                        )
-                    elif message.startswith("âœ…") or message.startswith("âŒ") or message.startswith("âš ï¸"):
-                        # Important status messages
-                        print(f"ðŸ“¨ ESP32: {message}")
-                    elif "AUTO_DISPENSE" in message or "SYSTEM BUSY" in message:
-                        # Important operational messages
-                        print(f"ðŸ“¨ ESP32: {message}")
-                    
-                    return message
-        except serial.SerialException as e:
-            print(f"âŒ Serial exception reading from ESP32: {e}")
-        except UnicodeDecodeError as e:
-            print(f"âš ï¸  Decode error reading from ESP32: {e}")
-        except Exception as e:
-            print(f"âŒ Unexpected error reading from ESP32: {e}")
-    return None
-
-def is_ir_detected():
     """Check if IR sensor detects a chit"""
     return not GPIO.input(IR_SENSOR_PIN)  # Active LOW
 
@@ -425,10 +466,10 @@ if user_res:
 
 # Check if connection is successful
 if not cap.isOpened():
-    print(f"Failed to open USB camera /dev/video{args.camera}")
+    print(f"Failed to open USB camera /dev/video{img_source}")
     sys.exit(1)
 
-print("Successfully connected to USB webcam")
+print(f"Successfully connected to USB camera at /dev/video{img_source}")
 
 # Set bounding box colors (using the Tableu 10 color scheme)
 bbox_colors = [(164,120,87), (68,148,228), (93,97,209), (178,182,133), (88,159,106), 
@@ -819,6 +860,11 @@ lcd.display_lines(
     ""
 )
 time.sleep(1)
+
+# Stop serial communication thread
+print("Stopping serial communication thread...")
+running = False  # Signal thread to stop
+time.sleep(0.3)  # Give thread time to finish
 
 # Clean up GPIO and servo
 set_servo_angle(SERVO_INITIAL_ANGLE)
