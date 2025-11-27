@@ -152,11 +152,6 @@ def run_detection_loop(detection_queue, ir_trigger_queue, config):
         model = YOLO(model_path, task='detect')
         labels = model.names
         
-        # Configure NMS settings to prevent timeout
-        if hasattr(model, 'overrides'):
-            model.overrides['nms_time_limit'] = 10.0  # Increase from 2.05s to 10s
-            model.overrides['agnostic_nms'] = True
-        
         model_load_time = time.time() - model_load_start
         print(f"✅ Model loaded in {model_load_time:.2f}s")
         print(f"   Classes: {list(labels.values())}")

@@ -106,7 +106,7 @@ python start_detection_system.py \
 ```bash
 python yolo_detect_optimized.py \
   --model chit_model_ncnn_model \
-  --inference-size 320 \
+  --inference-size 256 \
   --display \
   --camera 0
 ```
@@ -115,7 +115,7 @@ python yolo_detect_optimized.py \
 ```bash
 python yolo_detect_optimized.py \
   --model yolo11n.pt \
-  --inference-size 320 \
+  --inference-size 256 \
   --display \
   --camera 0
 ```
@@ -131,9 +131,11 @@ python esp32_comm.py --esp32_port /dev/ttyUSB0
 
 **Problem:** `Segmentation fault` or `NMS time limit exceeded` with NCNN model
 
+**Root Cause:** NCNN models have known stability issues on some Raspberry Pi systems. NMS (Non-Maximum Suppression) timeout is hardcoded in Ultralytics and cannot be changed.
+
 **Solutions:**
 
-1. **Use PyTorch model instead (recommended)**
+1. **Use PyTorch model instead (STRONGLY recommended)**
 ```bash
 python start_detection_system.py \
   --model yolo11n.pt \
@@ -142,16 +144,18 @@ python start_detection_system.py \
   --esp32_port /dev/ttyUSB0
 ```
 
-2. **Update ultralytics**
+2. **Update ultralytics to latest version**
 ```bash
-pip install --upgrade ultralytics
+pip install --upgrade ultralytics opencv-python
 ```
 
-3. **Rebuild NCNN model**
+3. **Reduce image size** (may help with NMS timeout)
 ```bash
-from ultralytics import YOLO
-model = YOLO('chit_model.pt')  # Your original trained model
-model.export(format='ncnn', imgsz=256)  # Export with smaller size
+python start_detection_system.py \
+  --model yolo11n.pt \
+  --inference-size 224 \
+  --camera 0 \
+  --esp32_port /dev/ttyUSB0
 ```
 
 4. **Fix Qt warnings** (if getting Qt plugin errors)
@@ -160,10 +164,14 @@ export QT_QPA_PLATFORM=offscreen
 python start_detection_system.py --model yolo11n.pt --esp32_port /dev/ttyUSB0
 ```
 
-5. **Check NCNN installation**
+5. **Use custom trained PyTorch model instead of NCNN**
 ```bash
-pip uninstall ncnn
-pip install ncnn-python
+# If you have chit_model.pt (original PyTorch model)
+python start_detection_system.py \
+  --model chit_model.pt \
+  --inference-size 256 \
+  --camera 0 \
+  --esp32_port /dev/ttyUSB0
 ```
 
 ### "pigpio daemon not running"
@@ -243,7 +251,7 @@ pkill -f start_detection_system
 ### Run in background (tmux)
 ```bash
 tmux new -s chits
-python start_detection_system.py --model chit_model_ncnn_model --esp32_port /dev/ttyUSB0
+python start_detection_system.py --model yolo11n.pt --esp32_port /dev/ttyUSB0
 # Detach: Ctrl+B, then D
 # Reattach: tmux attach -t chits
 ```
@@ -262,7 +270,7 @@ User=pi
 WorkingDirectory=/home/pi/Chits-Exchanger/source/rpi/yolo
 ExecStartPre=/bin/sleep 10
 ExecStartPre=/usr/bin/sudo /usr/bin/pigpiod
-ExecStart=/usr/bin/python3 start_detection_system.py --model chit_model_ncnn_model --inference-size 320 --camera 0 --esp32_port /dev/ttyUSB0
+ExecStart=/usr/bin/python3 start_detection_system.py --model yolo11n.pt --inference-size 256 --camera 0 --esp32_port /dev/ttyUSB0
 Restart=on-failure
 RestartSec=10s
 
