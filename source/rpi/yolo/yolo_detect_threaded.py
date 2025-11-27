@@ -164,12 +164,10 @@ VALID_CHITS = [5, 10, 20, 50]
 # Thread-safe queues for communication
 serial_tx_queue = Queue()  # Queue for outgoing serial messages
 serial_rx_queue = Queue()  # Queue for incoming serial messages
-detection_result_queue = Queue()  # Queue for detection results from YOLO thread
-frame_queue = Queue(maxsize=2)  # Queue for frames to process (limited size to prevent backlog)
 
 # Thread control flags
 running = True
-detection_active = threading.Event()  # Event to signal when detection should be active
+inference_enabled = True  # Simple flag to control detection (like your working code)
 
 # Parse user inputs
 model_path = args.model
