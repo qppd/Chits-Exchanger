@@ -10,9 +10,6 @@ import os
 import sys
 import time
 
-# Fix Qt plugin issues on headless systems
-os.environ['QT_QPA_PLATFORM'] = 'offscreen'
-
 import cv2
 import numpy as np
 from ultralytics import YOLO
@@ -109,6 +106,11 @@ def run_detection_loop(detection_queue, ir_trigger_queue, config):
     display_enabled = config['display']
     img_source = int(config['camera'])
     confirmation_frames = config['confirmation_frames']
+    
+    # Set Qt platform based on display mode
+    # Only use offscreen when NOT displaying (headless mode)
+    if not display_enabled and 'QT_QPA_PLATFORM' not in os.environ:
+        os.environ['QT_QPA_PLATFORM'] = 'offscreen'
     
     # Check if model exists
     if not os.path.exists(model_path):

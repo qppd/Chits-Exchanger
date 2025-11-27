@@ -158,13 +158,7 @@ python start_detection_system.py \
   --esp32_port /dev/ttyUSB0
 ```
 
-4. **Fix Qt warnings** (if getting Qt plugin errors)
-```bash
-export QT_QPA_PLATFORM=offscreen
-python start_detection_system.py --model yolo11n.pt --esp32_port /dev/ttyUSB0
-```
-
-5. **Use custom trained PyTorch model instead of NCNN**
+4. **Use custom trained PyTorch model instead of NCNN**
 ```bash
 # If you have chit_model.pt (original PyTorch model)
 python start_detection_system.py \
