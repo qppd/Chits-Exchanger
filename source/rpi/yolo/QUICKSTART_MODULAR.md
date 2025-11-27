@@ -52,7 +52,7 @@ cd /home/pi/Chits-Exchanger/source/rpi/yolo
 python start_detection_system.py --model yolo11n.pt --esp32_port /dev/ttyUSB0
 
 # Try NCNN if you want maximum speed (may cause segfaults)
-python start_detection_system.py --model chit_model_ncnn_model --inference-size 320 --resolution 640x480 --esp32_port /dev/ttyUSB0
+python start_detection_system.py --model chit_model_ncnn_model --inference-size 320 --thresh 0.6 --resolution 640x480 --esp32_port /dev/ttyUSB0
 ```
 
 ### 4. Recommended Settings for Raspberry Pi
@@ -70,6 +70,7 @@ python start_detection_system.py \
 python start_detection_system.py \
   --model chit_model_ncnn_model \
   --inference-size 320 \
+  --thresh 0.6 \
   --confirmation-frames 3 \
   --display \
   --resolution 640x480 \
@@ -84,6 +85,7 @@ python start_detection_system.py \
 python start_detection_system.py \
   --model chit_model_ncnn_model \
   --inference-size 320 \
+  --thresh 0.6 \
   --confirmation-frames 3 \
   --display \
   --resolution 640x480 \
@@ -98,7 +100,7 @@ python start_detection_system.py \
 | `--model` | YOLO model path/dir | (required) | `yolo11n.pt` (stable) or `chit_model_ncnn_model` (faster, risky) |
 | `--inference-size` | YOLO input size | 256 | 256 (PyTorch), 320 (NCNN) |
 | `--confirmation-frames` | Frames to confirm | 3 | 3-5 |
-| `--thresh` | Confidence threshold | 0.5 | 0.5 |
+| `--thresh` | Confidence threshold | 0.5 | 0.5 (PyTorch), 0.6+ (NCNN) |
 | `--camera` | USB camera ID | 0 | 0 |
 | `--esp32_port` | Serial port | /dev/ttyUSB0 | Check with `ls /dev/ttyUSB*` |
 | `--display` | Show real-time window | False | Use only if needed |
@@ -111,6 +113,7 @@ python start_detection_system.py \
 python yolo_detect_optimized.py \
   --model chit_model_ncnn_model \
   --inference-size 320 \
+  --thresh 0.6 \
   --display \
   --resolution 640x480 \
   --camera 0
@@ -134,13 +137,27 @@ python esp32_comm.py --esp32_port /dev/ttyUSB0
 
 ### NCNN Segmentation Fault or NMS Timeout
 
-**Problem:** `Segmentation fault` or `NMS time limit exceeded` with NCNN model
+**Problem:** `Segmentation fault`, `NMS time limit exceeded`, or `munmap_chunk(): invalid pointer` with NCNN model
 
-**Root Cause:** NCNN models have known stability issues on some Raspberry Pi systems. NMS (Non-Maximum Suppression) timeout is hardcoded in Ultralytics and cannot be changed.
+**Root Cause:** 
+- NCNN detecting 100+ boxes causes NMS timeout (hardcoded at 2.05s in Ultralytics)
+- Too many weak detections overwhelm the NMS algorithm
+- Memory corruption from NCNN library instability
 
 **Solutions:**
 
-1. **Use PyTorch model instead (STRONGLY recommended)**
+1. **Increase confidence threshold to filter weak detections (CRITICAL for NCNN)**
+```bash
+python yolo_detect_optimized.py \
+  --model chit_model_ncnn_model \
+  --inference-size 320 \
+  --thresh 0.6 \
+  --display \
+  --resolution 640x480 \
+  --camera 0
+```
+
+2. **Use PyTorch model instead (STRONGLY recommended for stability)**
 ```bash
 python start_detection_system.py \
   --model yolo11n.pt \
@@ -149,12 +166,12 @@ python start_detection_system.py \
   --esp32_port /dev/ttyUSB0
 ```
 
-2. **Update ultralytics to latest version**
+3. **Update ultralytics to latest version**
 ```bash
 pip install --upgrade ultralytics opencv-python
 ```
 
-3. **Reduce image size** (may help with NMS timeout)
+4. **Reduce image size** (may help with NMS timeout)
 ```bash
 python start_detection_system.py \
   --model yolo11n.pt \
@@ -163,7 +180,7 @@ python start_detection_system.py \
   --esp32_port /dev/ttyUSB0
 ```
 
-4. **Use custom trained PyTorch model instead of NCNN**
+5. **Use custom trained PyTorch model instead of NCNN**
 ```bash
 # If you have chit_model.pt (original PyTorch model)
 python start_detection_system.py \

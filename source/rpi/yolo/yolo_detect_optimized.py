@@ -27,7 +27,9 @@ bbox_colors = [(164,120,87), (68,148,228), (93,97,209), (178,182,133), (88,159,1
 
 def process_frame_detection(frame, model, labels, min_thresh, inference_size):
     """Process frame with YOLO inference"""
-    results = model(frame, verbose=False, imgsz=inference_size)
+    # Add max_det to limit detections and prevent NMS timeout (especially for NCNN)
+    # Add iou for better NMS filtering
+    results = model(frame, verbose=False, imgsz=inference_size, conf=min_thresh, iou=0.5, max_det=50)
     detections = results[0].boxes
     
     detected_chits = []
