@@ -327,20 +327,46 @@ else:
     print("LCD display not available - continuing without LCD")
 
 # Load the model into memory and get labelmap
-print(f"\nâ³ Loading YOLO model: {model_path}")
+print(f"\n⏳ Loading YOLO model: {model_path}")
 print("   This may take 10-30 seconds depending on model size...")
+
+# Show progress on LCD with animation
 if lcd.enabled:
-    lcd.display_lines(
-        "Loading Model",
-        model_path.split('/')[-1],
-        "Please wait...",
-        "10-30 seconds"
-    )
-model_load_start = time.time()
+    import threading
+    stop_animation = threading.Event()
+    
+    def animate_loading():
+        """Animate loading screen on LCD"""
+        spinner = ['|', '/', '-', '\\']
+        idx = 0
+        while not stop_animation.is_set():
+            lcd.display_lines(
+                "Loading Model",
+                model_path.split('/')[-1],
+                f"Please wait... {spinner[idx % 4]}",
+                f"Time: {int(time.time() - model_load_start)}s"
+            )
+            idx += 1
+            time.sleep(0.5)
+    
+    model_load_start = time.time()
+    anim_thread = threading.Thread(target=animate_loading, daemon=True)
+    anim_thread.start()
+else:
+    model_load_start = time.time()
+
+print("   ⏳ Initializing model engine...")
 model = YOLO(model_path, task='detect')
+print("   ⏳ Loading weights and preparing inference...")
 labels = model.names
+
+# Stop animation
+if lcd.enabled:
+    stop_animation.set()
+    time.sleep(0.6)  # Let animation thread finish
+
 model_load_time = time.time() - model_load_start
-print(f"Model loaded successfully in {model_load_time:.2f} seconds")
+print(f"✅ Model loaded successfully in {model_load_time:.2f} seconds")
 print(f"   Detected classes: {list(labels.values())}")
 if lcd.enabled:
     lcd.display_lines(
