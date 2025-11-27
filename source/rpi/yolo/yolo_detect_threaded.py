@@ -266,31 +266,31 @@ if esp32_port:
         # IMPORTANT: Disable DTR/RTS to prevent ESP32 auto-reset
         esp32_serial = serial.Serial()
         esp32_serial.port = esp32_port
-    esp32_serial.baudrate = 115200
-    esp32_serial.timeout = 0.01  # Very short timeout for non-blocking reads
-    esp32_serial.write_timeout = 1.0  # 1 second write timeout
-    esp32_serial.bytesize = serial.EIGHTBITS
-    esp32_serial.parity = serial.PARITY_NONE
-    esp32_serial.stopbits = serial.STOPBITS_ONE
-    
-    # Disable DTR and RTS BEFORE opening to prevent ESP32 reset
-    esp32_serial.dtr = False
-    esp32_serial.rts = False
-    
-    # Now open the port
-    esp32_serial.open()
-    
-    # Ensure DTR and RTS stay disabled (some systems re-enable on open)
-    esp32_serial.dtr = False
-    esp32_serial.rts = False
-    
-    # Wait for connection to stabilize (reduced from 2s since no reset occurs)
-    time.sleep(0.5)
-    
-    # Clear any buffered data from initialization
-    esp32_serial.reset_input_buffer()
-    esp32_serial.reset_output_buffer()
-    
+        esp32_serial.baudrate = 115200
+        esp32_serial.timeout = 0.01  # Very short timeout for non-blocking reads
+        esp32_serial.write_timeout = 1.0  # 1 second write timeout
+        esp32_serial.bytesize = serial.EIGHTBITS
+        esp32_serial.parity = serial.PARITY_NONE
+        esp32_serial.stopbits = serial.STOPBITS_ONE
+        
+        # Disable DTR and RTS BEFORE opening to prevent ESP32 reset
+        esp32_serial.dtr = False
+        esp32_serial.rts = False
+        
+        # Now open the port
+        esp32_serial.open()
+        
+        # Ensure DTR and RTS stay disabled (some systems re-enable on open)
+        esp32_serial.dtr = False
+        esp32_serial.rts = False
+        
+        # Wait for connection to stabilize (reduced from 2s since no reset occurs)
+        time.sleep(0.5)
+        
+        # Clear any buffered data from initialization
+        esp32_serial.reset_input_buffer()
+        esp32_serial.reset_output_buffer()
+        
         print(f"Serial connection to ESP32 established successfully")
         print(f"   Port: {esp32_port}")
         print(f"   Baud: 115200")
