@@ -168,11 +168,9 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--model', help='Path to YOLO model file',
                     required=True)
 parser.add_argument('--thresh', help='Minimum confidence threshold',
-                    default=0.5)
+                    default=0.7)
 parser.add_argument('--resolution', help='Resolution in WxH (example: "320x240")',
                     default=None)
-parser.add_argument('--record', help='Record results as demo1.avi',
-                    action='store_true')
 parser.add_argument('--esp32_port', help='Serial port for ESP32 (auto-detect if not specified)',
                     default=None)
 parser.add_argument('--camera', help='USB camera device ID (auto-detect if not specified)',
@@ -221,7 +219,6 @@ inference_enabled = True  # Simple flag to control detection (like your working 
 model_path = args.model
 min_thresh = args.thresh
 user_res = args.resolution
-record = args.record
 
 # Check if model file exists and is valid
 if (not os.path.exists(model_path)):
@@ -438,20 +435,6 @@ def read_from_esp32():
 
 # Set source type to USB webcam
 source_type = 'usb'
-
-# Check if recording is valid and set up recording
-if record:
-    if source_type not in ['video','usb']:
-        print('Recording only works for video and camera sources. Please try again.')
-        sys.exit(0)
-    if not user_res:
-        print('Please specify resolution to record video at.')
-        sys.exit(0)
-    
-    # Set up recording
-    record_name = 'demo1.avi'
-    record_fps = 30
-    recorder = cv2.VideoWriter(record_name, cv2.VideoWriter_fourcc(*'MJPG'), record_fps, (resW,resH))
 
 # Helper functions for servo control
 def angle_to_pulse(angle):
@@ -907,7 +890,6 @@ if esp32_serial and esp32_serial.is_open:
 lcd.clear()
 
 cap.release()
-if record: recorder.release()
 
 print("System shutdown complete.")
 
