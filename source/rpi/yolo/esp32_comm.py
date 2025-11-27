@@ -36,6 +36,7 @@ import serial
 import serial.tools.list_ports
 import threading
 from pathlib import Path
+import importlib.util
 
 # GPIO and Hardware Libraries
 try:
@@ -273,16 +274,13 @@ class ServoController:
         self.pi.stop()
 
 class ChitDetector:
-    """YOLO-based Chit Detection System"""
-    
-    def __init__(self, model_path=MODEL_PATH, camera_index=CAMERA_INDEX):
-        self.model_path = model_path
+    """NCNN-based Chit Detection System (using chit_model_ncnn_model/model_ncnn.py)"""
+    def __init__(self, model_path=None, camera_index=CAMERA_INDEX):
         self.camera_index = camera_index
-        self.model = None
         self.cap = None
         self.labels = {}
-        
-        # Chit value mapping from class names
+        self.model = None
+        self.ncnn_module = None
         self.chit_mapping = {
             '5': 5,
             '10': 10,
@@ -297,94 +295,85 @@ class ChitDetector:
             '20peso': 20,
             '50peso': 50
         }
-    
+
     def load_model(self):
-        """Load YOLO model"""
-        if not os.path.exists(self.model_path):
-            print(f"[ERROR] Model not found: {self.model_path}")
+        """Load NCNN model from chit_model_ncnn_model/model_ncnn.py"""
+        ncnn_path = os.path.join(os.path.dirname(__file__), 'chit_model_ncnn_model', 'model_ncnn.py')
+        if not os.path.exists(ncnn_path):
+            print(f"[ERROR] NCNN model file not found: {ncnn_path}")
             return False
-        
         try:
-            print(f"[YOLO] Loading model: {self.model_path}")
-            self.model = YOLO(self.model_path, task='detect')
-            self.labels = self.model.names
-            print(f"[YOLO] Model loaded successfully. Classes: {self.labels}")
+            print(f"[NCNN] Loading model from: {ncnn_path}")
+            spec = importlib.util.spec_from_file_location("model_ncnn", ncnn_path)
+            ncnn_module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(ncnn_module)
+            self.ncnn_module = ncnn_module
+            if hasattr(ncnn_module, 'load_model'):
+                self.model = ncnn_module.load_model()
+            if hasattr(ncnn_module, 'LABELS'):
+                self.labels = ncnn_module.LABELS
+            print(f"[NCNN] Model loaded successfully. Labels: {self.labels}")
             return True
         except Exception as e:
-            print(f"[ERROR] Failed to load model: {e}")
+            print(f"[ERROR] Failed to load NCNN model: {e}")
             return False
-    
+
     def open_camera(self):
-        """Open camera for detection"""
+        """Open camera for detection (320x240)"""
         try:
             self.cap = cv2.VideoCapture(self.camera_index)
             if not self.cap.isOpened():
                 print("[ERROR] Cannot open camera")
                 return False
-            
-            # Set camera properties for better detection
-            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-            
-            print(f"[CAMERA] Opened USB camera index {self.camera_index}")
+            # Set camera properties for 320x240
+            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
+            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
+            print(f"[CAMERA] Opened USB camera index {self.camera_index} at 320x240")
             return True
         except Exception as e:
             print(f"[ERROR] Failed to open camera: {e}")
             return False
-    
+
     def detect_chit(self, timeout=DETECTION_TIMEOUT):
         """
-        Detect chit denomination using YOLO
+        Detect chit denomination using NCNN model
         Returns: (success, chit_value, confidence)
         """
-        if not self.cap or not self.model:
+        if not self.cap or not self.ncnn_module or not hasattr(self.ncnn_module, 'detect_chit'):
             return False, 0, 0.0
-        
-        print("[YOLO] Starting chit detection...")
+        print("[NCNN] Starting chit detection...")
         start_time = time.time()
         best_detection = None
         best_confidence = 0.0
-        
-        # Capture and analyze frames for specified timeout
         frames_analyzed = 0
         while (time.time() - start_time) < timeout:
             ret, frame = self.cap.read()
             if not ret or frame is None:
                 print("[WARN] Failed to read frame")
                 continue
-            
             frames_analyzed += 1
-            
-            # Run YOLO inference
-            results = self.model(frame, verbose=False)
-            detections = results[0].boxes
-            
-            # Process detections
-            for detection in detections:
-                confidence = detection.conf.item()
-                class_idx = int(detection.cls.item())
-                class_name = self.labels[class_idx].lower()
-                
-                print(f"[YOLO] Frame {frames_analyzed}: Detected '{class_name}' with confidence {confidence:.2f}")
-                
-                if confidence > CONFIDENCE_THRESHOLD and confidence > best_confidence:
-                    # Map class name to chit value
-                    chit_value = self._map_class_to_value(class_name)
-                    if chit_value > 0:
-                        best_detection = chit_value
-                        best_confidence = confidence
-                        print(f"[YOLO] Best detection so far: {chit_value} peso ({confidence:.2%})")
-            
-            # Small delay between frames
+            # Run NCNN inference (assume detect_chit returns (label, confidence))
+            try:
+                result = self.ncnn_module.detect_chit(self.model, frame)
+                if result is not None:
+                    class_name, confidence = result
+                    class_name = str(class_name).lower()
+                    print(f"[NCNN] Frame {frames_analyzed}: Detected '{class_name}' with confidence {confidence:.2f}")
+                    if confidence > CONFIDENCE_THRESHOLD and confidence > best_confidence:
+                        chit_value = self._map_class_to_value(class_name)
+                        if chit_value > 0:
+                            best_detection = chit_value
+                            best_confidence = confidence
+                            print(f"[NCNN] Best detection so far: {chit_value} peso ({confidence:.2%})")
+            except Exception as e:
+                print(f"[NCNN] Detection error: {e}")
             time.sleep(0.1)
-        
-        print(f"[YOLO] Detection complete. Analyzed {frames_analyzed} frames")
-        
+        print(f"[NCNN] Detection complete. Analyzed {frames_analyzed} frames")
         if best_detection:
-            print(f"[YOLO] Final result: {best_detection} peso with {best_confidence:.2%} confidence")
+            print(f"[NCNN] Final result: {best_detection} peso with {best_confidence:.2%} confidence")
             return True, best_detection, best_confidence
         else:
-            print("[YOLO] No valid chit detected")
+            print("[NCNN] No valid chit detected")
             return False, 0, 0.0
     
     def _map_class_to_value(self, class_name):
@@ -659,33 +648,54 @@ class ChitSlaveController:
             self.send_to_esp32(f"ERROR:Reset failed")
     
     def run(self):
-        """Main run loop - listen for commands from ESP32"""
+        """Main run loop - listen for commands from ESP32 and show camera feed"""
         if not self.initialize():
             print("[FATAL] Initialization failed. Exiting.")
             return
-        
+
         self.running = True
         print("\n[SYSTEM] Slave controller running. Listening for ESP32 commands...")
         print("[SYSTEM] Press Ctrl+C to shutdown\n")
-        
+
+        # For imshow, get the camera object from detector
+        cap = self.detector.cap if self.detector else None
+        window_name = "ChitExchanger Camera"
+        if cap is not None:
+            cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+            cv2.resizeWindow(window_name, 640, 480)
+
         while self.running:
             try:
+                # Show camera feed if available
+                if cap is not None:
+                    ret, frame = cap.read()
+                    if ret and frame is not None:
+                        cv2.imshow(window_name, frame)
+                        # Allow window to refresh and check for ESC to quit
+                        if cv2.waitKey(1) & 0xFF == 27:
+                            print("[SYSTEM] ESC pressed, shutting down...")
+                            self.running = False
+                            break
                 # Read command from ESP32
                 if self.serial and self.serial.in_waiting > 0:
                     command = self.serial.readline().decode('utf-8', errors='ignore').strip()
                     if command:
                         self.handle_command(command)
-                
+
                 # Small delay to prevent CPU overload
                 time.sleep(0.01)
-                
+
             except serial.SerialException as e:
                 print(f"[ERROR] Serial error: {e}")
                 time.sleep(1)
-                
+
             except Exception as e:
                 print(f"[ERROR] Unexpected error: {e}")
                 time.sleep(0.5)
+
+        # Cleanup imshow window on exit
+        if cap is not None:
+            cv2.destroyWindow(window_name)
     
     def shutdown(self):
         """Shutdown all hardware gracefully"""
