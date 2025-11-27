@@ -420,6 +420,37 @@ if esp32_serial:
     print("Serial communication thread started")
     time.sleep(0.1)
 
+# Keyboard input thread for sending commands to ESP32
+def keyboard_input_thread():
+    """Background thread for keyboard input to send commands to ESP32"""
+    import select
+    import sys
+    
+    print("\n" + "="*60)
+    print("KEYBOARD COMMANDS:")
+    print("  Type commands and press ENTER to send to ESP32")
+    print("  Examples: test_hopper 1 3, test_chit 50, help")
+    print("  Press Ctrl+C to exit")
+    print("="*60 + "\n")
+    
+    while running:
+        try:
+            # Check if input is available (non-blocking on Linux)
+            if sys.stdin in select.select([sys.stdin], [], [], 0.1)[0]:
+                command = sys.stdin.readline().strip()
+                if command:
+                    print(f">>> Sending to ESP32: {command}")
+                    send_to_esp32(command)
+        except Exception as e:
+            if running:
+                print(f"Keyboard input error: {e}")
+            break
+
+# Start keyboard input thread (only if ESP32 is connected)
+if esp32_serial:
+    kbd_thread = threading.Thread(target=keyboard_input_thread, daemon=True, name="KeyboardInput")
+    kbd_thread.start()
+
 # Helper functions for serial communication
 def send_to_esp32(message):
     """Queue message to be sent to ESP32 via serial (non-blocking)"""
@@ -667,7 +698,11 @@ while True:
         # Show real-time view
         if use_gui:
             cv2.imshow('Chit Detection - Real-time', display_frame)
-            cv2.waitKey(1)
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord('q'):
+                print("\nQuitting...")
+                running = False
+                break
         
         # Check if IR sensor triggered
         if ir_detected and not last_ir_state and detection_enabled:
@@ -711,7 +746,11 @@ while True:
         # Show real-time view
         if use_gui:
             cv2.imshow('Chit Detection - Real-time', display_frame)
-            cv2.waitKey(1)
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord('q'):
+                print("\nQuitting...")
+                running = False
+                break
         
         # Add best detection from this frame to buffer
         if detected_chits:
