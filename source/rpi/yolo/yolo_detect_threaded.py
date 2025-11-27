@@ -577,9 +577,9 @@ def get_confirmed_detection():
 
 # Begin YOLO detection using USB webcam
 print(f"\n{'='*60}")
-print("âœ… SYSTEM INITIALIZATION COMPLETE")
+print("✅ SYSTEM INITIALIZATION COMPLETE")
 print(f"{'='*60}")
-print(f"Camera: USB webcam at /dev/video{args.camera}")
+print(f"Camera: {img_source}")
 print(f"IR Sensor: GPIO {IR_SENSOR_PIN}")
 print(f"Servo: GPIO {SERVO_PIN}")
 print(f"Detection mode: Real-time continuous detection")
