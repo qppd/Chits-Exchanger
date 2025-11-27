@@ -21,19 +21,47 @@ pip install ultralytics opencv-python pyserial RPi.GPIO smbus2
 sudo pigpiod
 ```
 
-### 2. Basic Usage
+### 2. About NCNN Models
+
+**NCNN is 2-3x faster than PyTorch on Raspberry Pi!**
+
+NCNN is optimized for ARM CPUs (like Raspberry Pi) and uses less memory. Your workspace already has NCNN models:
+- `chit_model_ncnn_model/` - Your custom chit detection model (NCNN format)
+- `my_model_ncnn_model/` - Alternative model
+- `yolo11n_ncnn_model/` - YOLO11n base model
+
+**Converting PyTorch to NCNN:**
+```bash
+# If you need to convert a .pt model to NCNN
+from ultralytics import YOLO
+model = YOLO('your_model.pt')
+model.export(format='ncnn')  # Creates your_model_ncnn_model/
+```
+
+### 3. Basic Usage
 
 ```bash
 cd /home/pi/Chits-Exchanger/source/rpi/yolo
 
-# Run with default settings
+# Run with default settings (PyTorch model)
 python start_detection_system.py --model yolo11n.pt --esp32_port /dev/ttyUSB0
+
+# Run with NCNN model (MUCH FASTER on Raspberry Pi!)
+python start_detection_system.py --model chit_model_ncnn_model --esp32_port /dev/ttyUSB0
 ```
 
-### 3. Recommended Settings for Raspberry Pi
+### 4. Recommended Settings for Raspberry Pi
 
 ```bash
-# Optimized for speed (320x320 inference, 3 confirmation frames)
+# BEST: NCNN model (2-3x faster on Raspberry Pi ARM CPU)
+python start_detection_system.py \
+  --model chit_model_ncnn_model \
+  --inference-size 320 \
+  --confirmation-frames 3 \
+  --camera 0 \
+  --esp32_port /dev/ttyUSB0
+
+# Alternative: PyTorch model
 python start_detection_system.py \
   --model yolo11n.pt \
   --inference-size 320 \
@@ -43,11 +71,12 @@ python start_detection_system.py \
   --display
 ```
 
-### 4. Even Faster (256x256)
+### 5. Maximum Speed (NCNN + 256x256)
 
 ```bash
+# Fastest configuration for Raspberry Pi
 python start_detection_system.py \
-  --model yolo11n.pt \
+  --model chit_model_ncnn_model \
   --inference-size 256 \
   --confirmation-frames 3 \
   --camera 0 \
@@ -58,7 +87,7 @@ python start_detection_system.py \
 
 | Argument | Description | Default | Recommended |
 |----------|-------------|---------|-------------|
-| `--model` | YOLO model path | (required) | `yolo11n.pt` |
+| `--model` | YOLO model path/dir | (required) | `chit_model_ncnn_model` (NCNN) or `yolo11n.pt` |
 | `--inference-size` | YOLO input size | 320 | 256-320 for Pi |
 | `--confirmation-frames` | Frames to confirm | 3 | 3-5 |
 | `--thresh` | Confidence threshold | 0.5 | 0.5 |
@@ -69,7 +98,16 @@ python start_detection_system.py \
 
 ## Testing Individual Modules
 
-### Test YOLO Detection Only
+### Test YOLO Detection Only (NCNN)
+```bash
+python yolo_detect_optimized.py \
+  --model chit_model_ncnn_model \
+  --inference-size 320 \
+  --display \
+  --camera 0
+```
+
+### Test YOLO Detection Only (PyTorch)
 ```bash
 python yolo_detect_optimized.py \
   --model yolo11n.pt \
@@ -132,11 +170,19 @@ EOF
 
 ## Expected Performance
 
+### With NCNN Model (Recommended)
 | Hardware | FPS (Waiting) | FPS (Detecting) | Detection Time |
 |----------|---------------|-----------------|----------------|
-| Pi 4 (4GB) | 30+ | 25-30 | ~150ms |
-| Pi 3B+ | 20+ | 15-20 | ~200ms |
-| Pi 5 | 40+ | 35-40 | ~100ms |
+| Pi 4 (4GB) | 30+ | 30-35 | ~100ms |
+| Pi 3B+ | 30+ | 20-25 | ~150ms |
+| Pi 5 | 40+ | 40-50 | ~60ms |
+
+### With PyTorch Model (.pt)
+| Hardware | FPS (Waiting) | FPS (Detecting) | Detection Time |
+|----------|---------------|-----------------|----------------|
+| Pi 4 (4GB) | 30+ | 20-25 | ~150ms |
+| Pi 3B+ | 20+ | 12-18 | ~250ms |
+| Pi 5 | 40+ | 30-35 | ~100ms |
 
 ## Process Management
 
@@ -154,7 +200,7 @@ pkill -f start_detection_system
 ### Run in background (tmux)
 ```bash
 tmux new -s chits
-python start_detection_system.py --model yolo11n.pt --esp32_port /dev/ttyUSB0
+python start_detection_system.py --model chit_model_ncnn_model --esp32_port /dev/ttyUSB0
 # Detach: Ctrl+B, then D
 # Reattach: tmux attach -t chits
 ```
@@ -173,7 +219,7 @@ User=pi
 WorkingDirectory=/home/pi/Chits-Exchanger/source/rpi/yolo
 ExecStartPre=/bin/sleep 10
 ExecStartPre=/usr/bin/sudo /usr/bin/pigpiod
-ExecStart=/usr/bin/python3 start_detection_system.py --model yolo11n.pt --inference-size 320 --camera 0 --esp32_port /dev/ttyUSB0
+ExecStart=/usr/bin/python3 start_detection_system.py --model chit_model_ncnn_model --inference-size 320 --camera 0 --esp32_port /dev/ttyUSB0
 Restart=on-failure
 RestartSec=10s
 

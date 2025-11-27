@@ -128,8 +128,20 @@ def run_detection_loop(detection_queue, ir_trigger_queue, config):
         resize = True
         resW, resH = int(user_res.split('x')[0]), int(user_res.split('x')[1])
     
-    # Load YOLO model
+    # Load YOLO model (supports .pt, .onnx, .torchscript, NCNN)
     print(f"⏳ Loading YOLO model: {model_path}")
+    
+    # Detect model format
+    is_ncnn = os.path.isdir(model_path) or '_ncnn_model' in model_path
+    if is_ncnn:
+        print("   Format: NCNN (optimized for ARM/mobile)")
+    elif model_path.endswith('.pt'):
+        print("   Format: PyTorch")
+    elif model_path.endswith('.onnx'):
+        print("   Format: ONNX")
+    elif model_path.endswith('.torchscript'):
+        print("   Format: TorchScript")
+    
     model_load_start = time.time()
     model = YOLO(model_path, task='detect')
     labels = model.names
