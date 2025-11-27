@@ -429,14 +429,16 @@ last_ir_state = False
 detection_enabled = False  # Flag to enable/disable detection
 
 # Real-time detection tracking
-CONFIRMATION_FRAMES = 5  # Number of consecutive frames needed to confirm detection
-CONFIDENCE_THRESHOLD = 0.5  # Minimum confidence for detection
+CONFIRMATION_FRAMES = 3  # Reduced from 5 to 3 for faster detection
+CONFIDENCE_THRESHOLD = 0.6  # Increased from 0.5 for more reliable detections
+FRAME_SKIP = 2  # Process every 3rd frame (skip 2 frames)
 detection_buffer = []  # Buffer to store recent detections
 
 # FPS tracking
 frame_count = 0
 fps_start_time = time.time()
 fps = 0.0
+frame_skip_counter = 0
 
 
 # Helper function for real-time detection with frame processing
@@ -523,6 +525,7 @@ print(f"Servo: GPIO {SERVO_PIN}")
 print(f"Detection mode: Real-time continuous detection")
 print(f"Confirmation frames: {CONFIRMATION_FRAMES}")
 print(f"Confidence threshold: {CONFIDENCE_THRESHOLD}")
+print(f"Frame skip rate: {FRAME_SKIP} (process every {FRAME_SKIP+1} frames)")
 print(f"{'='*60}")
 print("\nðŸŽ‰ System ready for operation!")
 print("Real-time detection running. Insert chit when ready.")
@@ -584,8 +587,15 @@ while True:
     
     # State machine logic
     if detection_state == "WAITING":
-        # Process frame for real-time detection
-        display_frame, detected_chits = process_frame_detection(frame)
+        # Process frame for real-time detection (with frame skipping)
+        frame_skip_counter += 1
+        if frame_skip_counter >= FRAME_SKIP:
+            frame_skip_counter = 0
+            display_frame, detected_chits = process_frame_detection(frame)
+        else:
+            # Use previous frame data or skip processing
+            display_frame = frame.copy()
+            detected_chits = []
         
         # Add FPS and status to display
         cv2.putText(display_frame, f'FPS: {fps:.1f}', (10, 30), 
@@ -619,8 +629,15 @@ while True:
             t_detect_start = time.perf_counter()
     
     elif detection_state == "DETECTING":
-        # Process frame for detection
-        display_frame, detected_chits = process_frame_detection(frame)
+        # Process frame for detection (with frame skipping for better performance)
+        frame_skip_counter += 1
+        if frame_skip_counter >= FRAME_SKIP:
+            frame_skip_counter = 0
+            display_frame, detected_chits = process_frame_detection(frame)
+        else:
+            # Use previous frame data or skip processing
+            display_frame = frame.copy()
+            detected_chits = []
         
         # Add FPS and status to display
         cv2.putText(display_frame, f'FPS: {fps:.1f}', (10, 30), 

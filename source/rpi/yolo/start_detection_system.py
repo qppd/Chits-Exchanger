@@ -25,11 +25,11 @@ def signal_handler(sig, frame):
     sys.exit(0)
 
 
-def start_yolo_detection(detection_queue, ir_trigger_queue, yolo_args):
+def start_yolo_detection(detection_queue, ir_trigger_queue, yolo_config):
     """Start YOLO detection process"""
     from yolo_detect_optimized import run_detection_loop
     try:
-        run_detection_loop(detection_queue, ir_trigger_queue)
+        run_detection_loop(detection_queue, ir_trigger_queue, yolo_config)
     except Exception as e:
         print(f"❌ YOLO process error: {e}")
 
