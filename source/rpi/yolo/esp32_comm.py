@@ -101,10 +101,11 @@ SERVO_PIN = 22
 SERVO_INITIAL_ANGLE = 39
 SERVO_RELEASE_ANGLE = 90
 
-# LCD Configuration
+# LCD Configuration (optional - system works without it)
 LCD_I2C_ADDR = 0x27
 LCD_WIDTH = 20
 LCD_ROWS = 4
+LCD_ENABLED = True  # Set to False to disable LCD
 
 # Serial Configuration
 SERIAL_PORT = '/dev/serial0'  # Default, will auto-detect if not found
@@ -132,9 +133,19 @@ class LCD:
     """I2C LCD 20x4 Display Controller"""
     
     def __init__(self, addr=LCD_I2C_ADDR):
-        self.bus = smbus.SMBus(1)
+        self.bus = None
         self.addr = addr
-        self._initialize()
+        self.enabled = False
+        
+        try:
+            self.bus = smbus.SMBus(1)
+            self._initialize()
+            self.enabled = True
+            print("[LCD] ✓ Initialized")
+        except Exception as e:
+            print(f"[LCD] ⚠ Not available: {e}")
+            print("[LCD] System will continue without LCD display")
+            self.enabled = False
     
     def _initialize(self):
         """Initialize LCD display"""
@@ -148,17 +159,26 @@ class LCD:
     
     def lcd_byte(self, bits, mode):
         """Send byte to LCD"""
-        bits_high = mode | (bits & 0xF0) | 0x08
-        bits_low = mode | ((bits << 4) & 0xF0) | 0x08
-        
-        self.bus.write_byte(self.addr, bits_high)
-        self._toggle_enable(bits_high)
-        
-        self.bus.write_byte(self.addr, bits_low)
-        self._toggle_enable(bits_low)
+        if not self.enabled or not self.bus:
+            return
+            
+        try:
+            bits_high = mode | (bits & 0xF0) | 0x08
+            bits_low = mode | ((bits << 4) & 0xF0) | 0x08
+            
+            self.bus.write_byte(self.addr, bits_high)
+            self._toggle_enable(bits_high)
+            
+            self.bus.write_byte(self.addr, bits_low)
+            self._toggle_enable(bits_low)
+        except:
+            self.enabled = False
     
     def _toggle_enable(self, bits):
         """Toggle enable bit"""
+        if not self.enabled or not self.bus:
+            return
+            
         time.sleep(E_DELAY)
         self.bus.write_byte(self.addr, (bits | 0x04))
         time.sleep(E_PULSE)
@@ -167,6 +187,9 @@ class LCD:
     
     def display_line(self, message, line):
         """Display message on specific line (1-4)"""
+        if not self.enabled:
+            return
+            
         line_addresses = {1: LCD_LINE_1, 2: LCD_LINE_2, 3: LCD_LINE_3, 4: LCD_LINE_4}
         if line not in line_addresses:
             return
@@ -179,11 +202,17 @@ class LCD:
     
     def clear(self):
         """Clear LCD display"""
+        if not self.enabled:
+            return
+            
         self.lcd_byte(0x01, LCD_CMD)
         time.sleep(E_DELAY)
     
     def display_message(self, line1="", line2="", line3="", line4=""):
         """Display multi-line message"""
+        if not self.enabled:
+            return
+            
         if line1: self.display_line(line1, 1)
         if line2: self.display_line(line2, 2)
         if line3: self.display_line(line3, 3)
@@ -407,9 +436,14 @@ class ChitSlaveController:
         try:
             # Initialize LCD
             print("[LCD] Initializing...")
-            self.lcd = LCD()
-            self.lcd.clear()
-            self.lcd.display_message("Chit Slave System", "Initializing...", "", "")
+            if LCD_ENABLED:
+                self.lcd = LCD()
+                if self.lcd.enabled:
+                    self.lcd.clear()
+                    self.lcd.display_message("Chit Slave System", "Initializing...", "", "")
+            else:
+                print("[LCD] Disabled in configuration")
+                self.lcd = None
             print("[LCD] ✓ Initialized")
             
             # Initialize IR Sensor
@@ -491,7 +525,8 @@ class ChitSlaveController:
             
         except Exception as e:
             print(f"\n[ERROR] Initialization failed: {e}")
-            self.lcd.display_message("INIT ERROR", str(e)[:20], "", "")
+            if self.lcd and hasattr(self.lcd, 'display_message'):
+                self.lcd.display_message("INIT ERROR", str(e)[:20], "", "")
             return False
     
     def send_to_esp32(self, message):
@@ -658,7 +693,7 @@ class ChitSlaveController:
         self.running = False
         
         try:
-            if self.lcd:
+            if self.lcd and hasattr(self.lcd, 'enabled') and self.lcd.enabled:
                 self.lcd.clear()
                 self.lcd.display_message("System Shutdown", "", "", "")
         except:
