@@ -109,7 +109,7 @@ LCD_ROWS = 4
 LCD_ENABLED = True  # Set to False to disable LCD
 
 # Serial Configuration
-SERIAL_PORT = '/dev/serial0'  # Default, will auto-detect if not found
+SERIAL_PORT = '/dev/ttyUSB0'  # Default, will auto-detect if not found
 SERIAL_BAUD = 115200
 
 # YOLO Configuration
@@ -285,15 +285,7 @@ class ChitDetector:
             '5': 5,
             '10': 10,
             '20': 20,
-            '50': 50,
-            'five': 5,
-            'ten': 10,
-            'twenty': 20,
-            'fifty': 50,
-            '5peso': 5,
-            '10peso': 10,
-            '20peso': 20,
-            '50peso': 50
+            '50': 50
         }
 
     def load_model(self):
@@ -647,8 +639,8 @@ class ChitSlaveController:
             print(f"[ERROR] Reset failed: {e}")
             self.send_to_esp32(f"ERROR:Reset failed")
     
-    def run(self):
-        """Main run loop - listen for commands from ESP32 and show camera feed"""
+    def run(self, debug_stdin=False):
+        """Main run loop - listen for commands from ESP32 and show camera feed. If debug_stdin is True, also read commands from stdin."""
         if not self.initialize():
             print("[FATAL] Initialization failed. Exiting.")
             return
@@ -664,6 +656,7 @@ class ChitSlaveController:
             cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
             cv2.resizeWindow(window_name, 640, 480)
 
+        import select
         while self.running:
             try:
                 # Show camera feed if available
@@ -676,23 +669,27 @@ class ChitSlaveController:
                             print("[SYSTEM] ESC pressed, shutting down...")
                             self.running = False
                             break
-                # Read command from ESP32
+                # Read command from ESP32 serial
                 if self.serial and self.serial.in_waiting > 0:
                     command = self.serial.readline().decode('utf-8', errors='ignore').strip()
                     if command:
                         self.handle_command(command)
-
+                # Read command from stdin (debug mode)
+                if debug_stdin:
+                    # Use select to check for input without blocking
+                    if select.select([sys.stdin], [], [], 0.01)[0]:
+                        stdin_cmd = sys.stdin.readline().strip()
+                        if stdin_cmd:
+                            print(f"[DEBUG] Received from stdin: {stdin_cmd}")
+                            self.handle_command(stdin_cmd)
                 # Small delay to prevent CPU overload
                 time.sleep(0.01)
-
             except serial.SerialException as e:
                 print(f"[ERROR] Serial error: {e}")
                 time.sleep(1)
-
             except Exception as e:
                 print(f"[ERROR] Unexpected error: {e}")
                 time.sleep(0.5)
-
         # Cleanup imshow window on exit
         if cap is not None:
             cv2.destroyWindow(window_name)
@@ -740,10 +737,13 @@ class ChitSlaveController:
 
 def main():
     """Main entry point"""
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--stdin', action='store_true', help='Read commands from standard input for debugging')
+    args = parser.parse_args()
     controller = ChitSlaveController()
-    
     try:
-        controller.run()
+        controller.run(debug_stdin=args.stdin)
     except KeyboardInterrupt:
         print("\n[SYSTEM] Keyboard interrupt received")
     except Exception as e:
