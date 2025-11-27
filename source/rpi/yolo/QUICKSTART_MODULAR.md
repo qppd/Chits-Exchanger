@@ -52,7 +52,7 @@ cd /home/pi/Chits-Exchanger/source/rpi/yolo
 python start_detection_system.py --model yolo11n.pt --esp32_port /dev/ttyUSB0
 
 # Try NCNN if you want maximum speed (may cause segfaults)
-python start_detection_system.py --model chit_model_ncnn_model --esp32_port /dev/ttyUSB0
+python start_detection_system.py --model chit_model_ncnn_model --inference-size 320 --resolution 640x480 --esp32_port /dev/ttyUSB0
 ```
 
 ### 4. Recommended Settings for Raspberry Pi
@@ -69,8 +69,10 @@ python start_detection_system.py \
 # Advanced: NCNN model (faster but may crash)
 python start_detection_system.py \
   --model chit_model_ncnn_model \
-  --inference-size 256 \
+  --inference-size 320 \
   --confirmation-frames 3 \
+  --display \
+  --resolution 640x480 \
   --camera 0 \
   --esp32_port /dev/ttyUSB0
 ```
@@ -81,8 +83,10 @@ python start_detection_system.py \
 # Fastest configuration for Raspberry Pi
 python start_detection_system.py \
   --model chit_model_ncnn_model \
-  --inference-size 256 \
+  --inference-size 320 \
   --confirmation-frames 3 \
+  --display \
+  --resolution 640x480 \
   --camera 0 \
   --esp32_port /dev/ttyUSB0
 ```
@@ -92,7 +96,7 @@ python start_detection_system.py \
 | Argument | Description | Default | Recommended |
 |----------|-------------|---------|-------------|
 | `--model` | YOLO model path/dir | (required) | `yolo11n.pt` (stable) or `chit_model_ncnn_model` (faster, risky) |
-| `--inference-size` | YOLO input size | 256 | 224-320 for Pi |
+| `--inference-size` | YOLO input size | 256 | 256 (PyTorch), 320 (NCNN) |
 | `--confirmation-frames` | Frames to confirm | 3 | 3-5 |
 | `--thresh` | Confidence threshold | 0.5 | 0.5 |
 | `--camera` | USB camera ID | 0 | 0 |
@@ -106,8 +110,9 @@ python start_detection_system.py \
 ```bash
 python yolo_detect_optimized.py \
   --model chit_model_ncnn_model \
-  --inference-size 256 \
+  --inference-size 320 \
   --display \
+  --resolution 640x480 \
   --camera 0
 ```
 
