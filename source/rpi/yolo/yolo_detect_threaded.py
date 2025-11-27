@@ -814,12 +814,26 @@ while True:
         detection_time = t_detect_stop - t_detect_start
         
         print(f"\n{'='*60}")
-        print(f"ðŸŽ‰ DETECTION COMPLETE")
+        print(f"🎉 DETECTION COMPLETE")
         print(f"{'='*60}")
-        print(f"   Detected Value: â‚±{confirmed_chit_value}")
+        print(f"   Detected Value: ₱{confirmed_chit_value}")
         print(f"   Confidence: {confirmed_confidence:.2%}")
         print(f"   Detection Time: {detection_time:.3f}s")
         print(f"{'='*60}")
+        
+        # Show confirmed detection on frame
+        display_frame = frame.copy()
+        display_frame = cv2.resize(display_frame, (320, 240))
+        cv2.putText(display_frame, f'CONFIRMED: P{confirmed_chit_value}', (10, 30), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
+        cv2.putText(display_frame, f'Conf: {confirmed_confidence:.1%}', (10, 60), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+        cv2.putText(display_frame, 'Releasing chit...', (10, 90), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
+        
+        if use_gui:
+            cv2.imshow('Chit Detection - Real-time', display_frame)
+            cv2.waitKey(1)
         
         # Update LCD
         lcd.display_lines(
@@ -866,7 +880,8 @@ while True:
                 "Dispensing...",
                 "Please wait"
             )
-            time.sleep(3)
+            # Reduced sleep time - ESP32 will handle dispensing
+            time.sleep(1)
         else:
             print(f"âš ï¸  Failed to send AUTO_DISPENSE command")
             lcd.display_lines(
