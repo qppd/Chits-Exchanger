@@ -1,119 +1,64 @@
+#!/usr/bin/env python3
 """
-ESP32 Communication & Hardware Management Module
-- Monitors IR sensor (GPIO 17)
-- Manages ESP32 serial communication (115200 baud)
-- Controls servo for chit release (GPIO 22)
-- Drives LCD display (I2C)
-- Listens for YOLO detection results and triggers dispensing
-- Sends IR trigger signal to YOLO when chit detected
+ESP32 Communication Module - Slave System for Chit Detection and Dispensing
+This module acts as a slave that receives commands from ESP32 CoinExchanger.ino
+
+Commands received from ESP32:
+- CHECK_IR - Check if IR sensor detects chit
+- DETECT_CHIT - Run YOLO detection to identify chit denomination
+- DISPLAY:<message> - Display message on LCD
+- DISPENSE_CHIT - Control servo to release chit
+
+Responses sent to ESP32:
+- IR_DETECTED - IR sensor detected chit
+- IR_CLEAR - No chit detected by IR
+- CHIT_5 / CHIT_10 / CHIT_20 / CHIT_50 - Detected chit denomination
+- CHIT_UNKNOWN - Could not identify chit
+- DISPENSE_COMPLETE - Servo finished dispensing
+- DISPLAY_OK - LCD updated successfully
+- ERROR:<message> - Error occurred
+
+Hardware:
+- IR Sensor: GPIO17
+- Servo Motor: GPIO22 (angles: 39° initial, 90° release)
+- LCD: I2C 0x27 (20x4)
+- Serial: /dev/serial0 (connected to ESP32)
+
+Author: Chits Exchanger System
+Date: November 2025
 """
 
 import os
 import sys
-import argparse
 import time
+import signal
 import serial
-import RPi.GPIO as GPIO
-import pigpio
-from multiprocessing import Queue
+import threading
+from pathlib import Path
 
-# I2C LCD Support
+# GPIO and Hardware Libraries
 try:
+    import RPi.GPIO as GPIO
+    import pigpio
     import smbus2 as smbus
-    LCD_AVAILABLE = True
-except ImportError:
-    print("WARNING: smbus2 not available. LCD display will be disabled.")
-    LCD_AVAILABLE = False
+except ImportError as e:
+    print(f"Error importing hardware libraries: {e}")
+    print("Make sure RPi.GPIO, pigpio, and smbus2 are installed")
+    sys.exit(1)
 
-# ===== LCD Configuration =====
-I2C_ADDR = 0x27
-LCD_WIDTH = 20
-LCD_ROWS = 4
+# YOLO imports
+try:
+    import cv2
+    import numpy as np
+    from ultralytics import YOLO
+except ImportError as e:
+    print(f"Error importing YOLO libraries: {e}")
+    print("Make sure opencv-python and ultralytics are installed")
+    sys.exit(1)
 
-LCD_CHR = 1
-LCD_CMD = 0
+# ==================== CONFIGURATION ====================
 
-LCD_LINE_1 = 0x80
-LCD_LINE_2 = 0xC0
-LCD_LINE_3 = 0x94
-LCD_LINE_4 = 0xD4
-
-E_PULSE = 0.0005
-E_DELAY = 0.0005
-
-
-class LCD:
-    """I2C LCD Display Class for 20x4 character display"""
-    def __init__(self, addr=I2C_ADDR, bus=1):
-        if not LCD_AVAILABLE:
-            self.enabled = False
-            return
-        
-        try:
-            self.bus = smbus.SMBus(bus)
-            self.addr = addr
-            self.enabled = True
-            
-            self.lcd_byte(0x33, LCD_CMD)
-            self.lcd_byte(0x32, LCD_CMD)
-            self.lcd_byte(0x06, LCD_CMD)
-            self.lcd_byte(0x0C, LCD_CMD)
-            self.lcd_byte(0x28, LCD_CMD)
-            self.lcd_byte(0x01, LCD_CMD)
-            time.sleep(E_DELAY)
-            print(f"LCD initialized at address 0x{addr:02X}")
-        except Exception as e:
-            print(f"WARNING: Could not initialize LCD: {e}")
-            self.enabled = False
-
-    def lcd_byte(self, bits, mode):
-        if not self.enabled:
-            return
-        try:
-            bits_high = mode | (bits & 0xF0) | 0x08
-            bits_low = mode | ((bits << 4) & 0xF0) | 0x08
-            self.bus.write_byte(self.addr, bits_high)
-            self.lcd_toggle_enable(bits_high)
-            self.bus.write_byte(self.addr, bits_low)
-            self.lcd_toggle_enable(bits_low)
-        except:
-            pass
-
-    def lcd_toggle_enable(self, bits):
-        time.sleep(E_DELAY)
-        self.bus.write_byte(self.addr, (bits | 0x04))
-        time.sleep(E_PULSE)
-        self.bus.write_byte(self.addr, (bits & ~0x04))
-        time.sleep(E_DELAY)
-
-    def lcd_string(self, message, line):
-        if not self.enabled:
-            return
-        message = message.ljust(LCD_WIDTH, " ")
-        self.lcd_byte(line, LCD_CMD)
-        for i in range(min(LCD_WIDTH, len(message))):
-            self.lcd_byte(ord(message[i]), LCD_CHR)
-
-    def clear(self):
-        if not self.enabled:
-            return
-        self.lcd_byte(0x01, LCD_CMD)
-        time.sleep(E_DELAY)
-    
-    def display_lines(self, line1="", line2="", line3="", line4=""):
-        if not self.enabled:
-            return
-        if line1:
-            self.lcd_string(line1, LCD_LINE_1)
-        if line2:
-            self.lcd_string(line2, LCD_LINE_2)
-        if line3:
-            self.lcd_string(line3, LCD_LINE_3)
-        if line4:
-            self.lcd_string(line4, LCD_LINE_4)
-
-
-# GPIO Pin Configurations for RPi
+# GPIO Pins (BCM numbering)
 IR_SENSOR_PIN = 17
 SERVO_PIN = 22
 
@@ -121,275 +66,581 @@ SERVO_PIN = 22
 SERVO_INITIAL_ANGLE = 39
 SERVO_RELEASE_ANGLE = 90
 
-# Valid chit denominations
-VALID_CHITS = [5, 10, 20, 50]
+# LCD Configuration
+LCD_I2C_ADDR = 0x27
+LCD_WIDTH = 20
+LCD_ROWS = 4
 
+# Serial Configuration
+SERIAL_PORT = '/dev/serial0'
+SERIAL_BAUD = 115200
 
-def angle_to_pulse(angle):
-    """Convert angle (0-180) to pulse width (500-2500us)"""
-    return int(500 + (angle / 180.0) * 2000)
+# YOLO Configuration
+MODEL_PATH = '/home/pi/Desktop/PROJECTS/Chits-Exchanger/source/rpi/yolo/chit_model.pt'
+CAMERA_INDEX = 0  # USB camera or Pi Camera index
+DETECTION_TIMEOUT = 5.0  # seconds
+CONFIDENCE_THRESHOLD = 0.6
 
+# ==================== LCD CLASS ====================
 
-def set_servo_angle(pi, angle):
-    """Set servo to specified angle"""
-    if angle < 0:
-        angle = 0
-    elif angle > 180:
-        angle = 180
-    pulse_width = angle_to_pulse(angle)
-    pi.set_servo_pulsewidth(SERVO_PIN, pulse_width)
+# LCD Commands
+LCD_CHR = 1
+LCD_CMD = 0
+LCD_LINE_1 = 0x80
+LCD_LINE_2 = 0xC0
+LCD_LINE_3 = 0x94
+LCD_LINE_4 = 0xD4
+E_PULSE = 0.0005
+E_DELAY = 0.0005
 
-
-def release_chit(pi):
-    """Release chit by moving servo"""
-    print(f"Releasing chit: Moving servo from {SERVO_INITIAL_ANGLE}° to {SERVO_RELEASE_ANGLE}°")
-    set_servo_angle(pi, SERVO_RELEASE_ANGLE)
-    time.sleep(2)
-    print(f"Returning servo to initial position {SERVO_INITIAL_ANGLE}°")
-    set_servo_angle(pi, SERVO_INITIAL_ANGLE)
-
-
-def is_ir_detected():
-    """Check if IR sensor detects a chit (Active LOW)"""
-    return not GPIO.input(IR_SENSOR_PIN)
-
-
-def send_to_esp32(esp32_serial, message):
-    """Send message to ESP32 via serial"""
-    if esp32_serial and esp32_serial.is_open:
-        try:
-            esp32_serial.reset_output_buffer()
-            full_message = message + '\n'
-            esp32_serial.write(full_message.encode('utf-8'))
-            esp32_serial.flush()
-            print(f"✅ Sent to ESP32: {message}")
-            return True
-        except serial.SerialException as e:
-            print(f"❌ Serial error sending to ESP32: {e}")
-            return False
-        except Exception as e:
-            print(f"❌ Error sending to ESP32: {e}")
-            return False
-    return False
-
-
-def read_from_esp32(esp32_serial):
-    """Read messages from ESP32 (non-blocking)"""
-    if esp32_serial and esp32_serial.is_open:
-        try:
-            if esp32_serial.in_waiting > 0:
-                message = esp32_serial.readline().decode('utf-8', errors='ignore').strip()
-                if message and ("AUTO_DISPENSE" in message or "DISPENSING_COMPLETE" in message or "✅" in message or "❌" in message):
-                    print(f"📨 ESP32: {message}")
-                    return message
-        except:
-            pass
-    return None
-
-
-def run_esp32_comm_loop(detection_queue, ir_trigger_queue, esp32_port):
-    """
-    Main communication loop
-    - Monitors IR sensor
-    - Sends IR trigger to YOLO
-    - Listens for detection results
-    - Controls servo and ESP32 dispensing
-    - Manages LCD display
-    """
-    print(f"\n{'='*60}")
-    print("🔌 ESP32 COMMUNICATION MODULE - STARTUP")
-    print(f"{'='*60}")
+class LCD:
+    """I2C LCD 20x4 Display Controller"""
     
-    # Initialize GPIO
-    print("Initializing GPIO...")
-    GPIO.setmode(GPIO.BCM)
-    GPIO.setwarnings(False)
-    GPIO.setup(IR_SENSOR_PIN, GPIO.IN)
-    print("✅ GPIO initialized")
+    def __init__(self, addr=LCD_I2C_ADDR):
+        self.bus = smbus.SMBus(1)
+        self.addr = addr
+        self._initialize()
     
-    # Initialize pigpio for servo
-    print("Initializing servo control...")
-    pi = pigpio.pi()
-    if not pi.connected:
-        print("ERROR: Could not connect to pigpio daemon. Run 'sudo pigpiod' first.")
-        sys.exit(1)
-    set_servo_angle(pi, SERVO_INITIAL_ANGLE)
-    print(f"✅ Servo initialized to {SERVO_INITIAL_ANGLE}°")
+    def _initialize(self):
+        """Initialize LCD display"""
+        self.lcd_byte(0x33, LCD_CMD)
+        self.lcd_byte(0x32, LCD_CMD)
+        self.lcd_byte(0x06, LCD_CMD)
+        self.lcd_byte(0x0C, LCD_CMD)
+        self.lcd_byte(0x28, LCD_CMD)
+        self.lcd_byte(0x01, LCD_CMD)
+        time.sleep(E_DELAY)
     
-    # Initialize serial to ESP32
-    esp32_serial = None
-    try:
-        print(f"Initializing serial connection to ESP32 on {esp32_port}...")
-        esp32_serial = serial.Serial()
-        esp32_serial.port = esp32_port
-        esp32_serial.baudrate = 115200
-        esp32_serial.timeout = 0.01
-        esp32_serial.write_timeout = 1.0
-        esp32_serial.bytesize = serial.EIGHTBITS
-        esp32_serial.parity = serial.PARITY_NONE
-        esp32_serial.stopbits = serial.STOPBITS_ONE
-        esp32_serial.dtr = False
-        esp32_serial.rts = False
-        esp32_serial.open()
-        esp32_serial.dtr = False
-        esp32_serial.rts = False
+    def lcd_byte(self, bits, mode):
+        """Send byte to LCD"""
+        bits_high = mode | (bits & 0xF0) | 0x08
+        bits_low = mode | ((bits << 4) & 0xF0) | 0x08
+        
+        self.bus.write_byte(self.addr, bits_high)
+        self._toggle_enable(bits_high)
+        
+        self.bus.write_byte(self.addr, bits_low)
+        self._toggle_enable(bits_low)
+    
+    def _toggle_enable(self, bits):
+        """Toggle enable bit"""
+        time.sleep(E_DELAY)
+        self.bus.write_byte(self.addr, (bits | 0x04))
+        time.sleep(E_PULSE)
+        self.bus.write_byte(self.addr, (bits & ~0x04))
+        time.sleep(E_DELAY)
+    
+    def display_line(self, message, line):
+        """Display message on specific line (1-4)"""
+        line_addresses = {1: LCD_LINE_1, 2: LCD_LINE_2, 3: LCD_LINE_3, 4: LCD_LINE_4}
+        if line not in line_addresses:
+            return
+        
+        message = message.ljust(LCD_WIDTH, " ")[:LCD_WIDTH]
+        self.lcd_byte(line_addresses[line], LCD_CMD)
+        
+        for char in message:
+            self.lcd_byte(ord(char), LCD_CHR)
+    
+    def clear(self):
+        """Clear LCD display"""
+        self.lcd_byte(0x01, LCD_CMD)
+        time.sleep(E_DELAY)
+    
+    def display_message(self, line1="", line2="", line3="", line4=""):
+        """Display multi-line message"""
+        if line1: self.display_line(line1, 1)
+        if line2: self.display_line(line2, 2)
+        if line3: self.display_line(line3, 3)
+        if line4: self.display_line(line4, 4)
+
+# ==================== HARDWARE CLASSES ====================
+
+class IRSensor:
+    """IR Obstacle Detection Sensor"""
+    
+    def __init__(self, pin=IR_SENSOR_PIN):
+        self.pin = pin
+        GPIO.setmode(GPIO.BCM)
+        GPIO.setup(self.pin, GPIO.IN)
+    
+    def is_detected(self):
+        """Check if chit is detected (LOW = detected)"""
+        return not GPIO.input(self.pin)
+    
+    def cleanup(self):
+        """Cleanup GPIO"""
+        GPIO.cleanup()
+
+class ServoController:
+    """Servo Motor Controller using pigpio"""
+    
+    def __init__(self, pin=SERVO_PIN):
+        self.pin = pin
+        self.pi = pigpio.pi()
+        
+        if not self.pi.connected:
+            raise RuntimeError("Could not connect to pigpio daemon!")
+        
+        self.set_angle(SERVO_INITIAL_ANGLE)
+    
+    def angle_to_pulse(self, angle):
+        """Convert angle (0-180) to pulse width (500-2500us)"""
+        return int(500 + (angle / 180.0) * 2000)
+    
+    def set_angle(self, angle):
+        """Set servo to specific angle"""
+        pulse_width = self.angle_to_pulse(angle)
+        self.pi.set_servo_pulsewidth(self.pin, pulse_width)
+    
+    def release_chit(self):
+        """Release chit by rotating servo"""
+        print(f"[SERVO] Moving to {SERVO_RELEASE_ANGLE}° (release)")
+        self.set_angle(SERVO_RELEASE_ANGLE)
+        time.sleep(1.0)  # Wait for chit to fall
+        
+        print(f"[SERVO] Returning to {SERVO_INITIAL_ANGLE}° (initial)")
+        self.set_angle(SERVO_INITIAL_ANGLE)
         time.sleep(0.5)
-        esp32_serial.reset_input_buffer()
-        esp32_serial.reset_output_buffer()
-        print(f"✅ Serial connection to ESP32 established")
-    except serial.SerialException as e:
-        print(f"❌ Serial connection failed: {e}")
-        esp32_serial = None
     
-    # Initialize LCD
-    print("Initializing LCD display...")
-    lcd = LCD()
-    if lcd.enabled:
-        lcd.clear()
-        lcd.display_lines(
-            "System Ready!",
-            "Real-time mode",
-            "Insert chit",
-            ""
-        )
-        time.sleep(2)
-        lcd.display_lines(
-            "Ready - Scanning",
-            "Waiting for chit...",
-            "",
-            ""
-        )
+    def cleanup(self):
+        """Stop servo and cleanup"""
+        self.pi.set_servo_pulsewidth(self.pin, 0)
+        self.pi.stop()
+
+class ChitDetector:
+    """YOLO-based Chit Detection System"""
     
-    print(f"{'='*60}\n")
-    print("🎉 ESP32 Communication module ready!")
-    print("Monitoring IR sensor and YOLO detections...\n")
+    def __init__(self, model_path=MODEL_PATH, camera_index=CAMERA_INDEX):
+        self.model_path = model_path
+        self.camera_index = camera_index
+        self.model = None
+        self.cap = None
+        self.labels = {}
+        
+        # Chit value mapping from class names
+        self.chit_mapping = {
+            '5': 5,
+            '10': 10,
+            '20': 20,
+            '50': 50,
+            'five': 5,
+            'ten': 10,
+            'twenty': 20,
+            'fifty': 50,
+            '5peso': 5,
+            '10peso': 10,
+            '20peso': 20,
+            '50peso': 50
+        }
     
-    last_ir_state = False
+    def load_model(self):
+        """Load YOLO model"""
+        if not os.path.exists(self.model_path):
+            print(f"[ERROR] Model not found: {self.model_path}")
+            return False
+        
+        try:
+            print(f"[YOLO] Loading model: {self.model_path}")
+            self.model = YOLO(self.model_path, task='detect')
+            self.labels = self.model.names
+            print(f"[YOLO] Model loaded successfully. Classes: {self.labels}")
+            return True
+        except Exception as e:
+            print(f"[ERROR] Failed to load model: {e}")
+            return False
     
-    try:
-        while True:
-            # Check IR sensor state
-            ir_detected = is_ir_detected()
+    def open_camera(self):
+        """Open camera for detection"""
+        try:
+            self.cap = cv2.VideoCapture(self.camera_index)
+            if not self.cap.isOpened():
+                print("[ERROR] Cannot open camera")
+                return False
             
-            # IR rising edge: trigger YOLO detection
-            if ir_detected and not last_ir_state:
-                print(f"\n{'='*60}")
-                print(f"🔍 IR SENSOR TRIGGERED - CHIT DETECTED")
-                print(f"{'='*60}")
+            # Set camera properties for better detection
+            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+            
+            print(f"[CAMERA] Opened camera index {self.camera_index}")
+            return True
+        except Exception as e:
+            print(f"[ERROR] Failed to open camera: {e}")
+            return False
+    
+    def detect_chit(self, timeout=DETECTION_TIMEOUT):
+        """
+        Detect chit denomination using YOLO
+        Returns: (success, chit_value, confidence)
+        """
+        if not self.cap or not self.model:
+            return False, 0, 0.0
+        
+        print("[YOLO] Starting chit detection...")
+        start_time = time.time()
+        best_detection = None
+        best_confidence = 0.0
+        
+        # Capture and analyze frames for specified timeout
+        frames_analyzed = 0
+        while (time.time() - start_time) < timeout:
+            ret, frame = self.cap.read()
+            if not ret:
+                print("[WARN] Failed to read frame")
+                continue
+            
+            frames_analyzed += 1
+            
+            # Run YOLO inference
+            results = self.model(frame, verbose=False)
+            detections = results[0].boxes
+            
+            # Process detections
+            for detection in detections:
+                confidence = detection.conf.item()
+                class_idx = int(detection.cls.item())
+                class_name = self.labels[class_idx].lower()
                 
-                # Signal YOLO to start detecting
-                ir_trigger_queue.put("IR_DETECTED")
+                print(f"[YOLO] Frame {frames_analyzed}: Detected '{class_name}' with confidence {confidence:.2f}")
                 
-                lcd.display_lines(
-                    "IR DETECTED!",
-                    "YOLO detecting...",
-                    "Please wait...",
+                if confidence > CONFIDENCE_THRESHOLD and confidence > best_confidence:
+                    # Map class name to chit value
+                    chit_value = self._map_class_to_value(class_name)
+                    if chit_value > 0:
+                        best_detection = chit_value
+                        best_confidence = confidence
+                        print(f"[YOLO] Best detection so far: {chit_value} peso ({confidence:.2%})")
+            
+            # Small delay between frames
+            time.sleep(0.1)
+        
+        print(f"[YOLO] Detection complete. Analyzed {frames_analyzed} frames")
+        
+        if best_detection:
+            print(f"[YOLO] Final result: {best_detection} peso with {best_confidence:.2%} confidence")
+            return True, best_detection, best_confidence
+        else:
+            print("[YOLO] No valid chit detected")
+            return False, 0, 0.0
+    
+    def _map_class_to_value(self, class_name):
+        """Map YOLO class name to chit value"""
+        class_name = class_name.lower().replace(' ', '').replace('_', '')
+        return self.chit_mapping.get(class_name, 0)
+    
+    def release_camera(self):
+        """Release camera resource"""
+        if self.cap:
+            self.cap.release()
+            self.cap = None
+            print("[CAMERA] Released")
+
+# ==================== MAIN SLAVE CONTROLLER ====================
+
+class ChitSlaveController:
+    """Main slave controller that receives commands from ESP32"""
+    
+    def __init__(self):
+        self.running = False
+        self.serial = None
+        
+        # Initialize hardware
+        self.lcd = None
+        self.ir_sensor = None
+        self.servo = None
+        self.detector = None
+        
+        # State tracking
+        self.last_ir_state = False
+        
+        # Setup signal handlers
+        signal.signal(signal.SIGINT, self._signal_handler)
+        signal.signal(signal.SIGTERM, self._signal_handler)
+    
+    def _signal_handler(self, signum, frame):
+        """Handle shutdown signals"""
+        print("\n[SYSTEM] Shutdown signal received")
+        self.shutdown()
+        sys.exit(0)
+    
+    def initialize(self):
+        """Initialize all hardware components"""
+        print("\n" + "="*50)
+        print("ESP32 Chit Slave Controller Initializing...")
+        print("="*50)
+        
+        try:
+            # Initialize LCD
+            print("[LCD] Initializing...")
+            self.lcd = LCD()
+            self.lcd.clear()
+            self.lcd.display_message("Chit Slave System", "Initializing...", "", "")
+            print("[LCD] ✓ Initialized")
+            
+            # Initialize IR Sensor
+            print("[IR] Initializing...")
+            self.ir_sensor = IRSensor()
+            print("[IR] ✓ Initialized")
+            
+            # Initialize Servo
+            print("[SERVO] Initializing...")
+            self.servo = ServoController()
+            print("[SERVO] ✓ Initialized")
+            
+            # Initialize YOLO Detector
+            print("[YOLO] Initializing...")
+            self.detector = ChitDetector()
+            if not self.detector.load_model():
+                raise RuntimeError("Failed to load YOLO model")
+            print("[YOLO] ✓ Model loaded")
+            
+            # Open camera
+            if not self.detector.open_camera():
+                raise RuntimeError("Failed to open camera")
+            print("[CAMERA] ✓ Opened")
+            
+            # Initialize Serial Communication
+            print("[SERIAL] Initializing...")
+            self.serial = serial.Serial(
+                port=SERIAL_PORT,
+                baudrate=SERIAL_BAUD,
+                timeout=1.0,
+                write_timeout=1.0
+            )
+            time.sleep(2)  # Wait for serial to stabilize
+            print(f"[SERIAL] ✓ Connected on {SERIAL_PORT} @ {SERIAL_BAUD} baud")
+            
+            # Display ready status
+            self.lcd.clear()
+            self.lcd.display_message("Slave System Ready", "Waiting for ESP32", "commands...", "")
+            
+            print("\n" + "="*50)
+            print("✓ ALL SYSTEMS INITIALIZED")
+            print("="*50 + "\n")
+            
+            # Send ready signal to ESP32
+            self.send_to_esp32("SLAVE_READY")
+            
+            return True
+            
+        except Exception as e:
+            print(f"\n[ERROR] Initialization failed: {e}")
+            self.lcd.display_message("INIT ERROR", str(e)[:20], "", "")
+            return False
+    
+    def send_to_esp32(self, message):
+        """Send message to ESP32 via serial"""
+        if self.serial and self.serial.is_open:
+            try:
+                self.serial.write(f"{message}\n".encode())
+                self.serial.flush()
+                print(f"[TX → ESP32] {message}")
+            except Exception as e:
+                print(f"[ERROR] Failed to send to ESP32: {e}")
+    
+    def handle_command(self, command):
+        """Handle commands received from ESP32"""
+        command = command.strip()
+        if not command:
+            return
+        
+        print(f"[RX ← ESP32] {command}")
+        
+        # Parse command
+        if command == "CHECK_IR":
+            self.cmd_check_ir()
+        
+        elif command == "DETECT_CHIT":
+            self.cmd_detect_chit()
+        
+        elif command.startswith("DISPLAY:"):
+            message = command[8:]  # Remove "DISPLAY:" prefix
+            self.cmd_display(message)
+        
+        elif command == "DISPENSE_CHIT":
+            self.cmd_dispense()
+        
+        elif command == "PING":
+            self.send_to_esp32("PONG")
+        
+        elif command == "RESET":
+            self.cmd_reset()
+        
+        else:
+            print(f"[WARN] Unknown command: {command}")
+            self.send_to_esp32(f"ERROR:Unknown command '{command}'")
+    
+    def cmd_check_ir(self):
+        """Check IR sensor status"""
+        try:
+            is_detected = self.ir_sensor.is_detected()
+            
+            if is_detected:
+                self.send_to_esp32("IR_DETECTED")
+                self.lcd.display_line("IR: Chit detected", 4)
+            else:
+                self.send_to_esp32("IR_CLEAR")
+                self.lcd.display_line("IR: Clear", 4)
+                
+        except Exception as e:
+            print(f"[ERROR] IR check failed: {e}")
+            self.send_to_esp32(f"ERROR:IR check failed")
+    
+    def cmd_detect_chit(self):
+        """Run YOLO detection to identify chit"""
+        try:
+            self.lcd.clear()
+            self.lcd.display_message("Detecting chit...", "Using YOLO", "Please wait...", "")
+            
+            success, chit_value, confidence = self.detector.detect_chit()
+            
+            if success and chit_value > 0:
+                # Send result to ESP32
+                self.send_to_esp32(f"CHIT_{chit_value}")
+                
+                # Update LCD
+                self.lcd.clear()
+                self.lcd.display_message(
+                    "Chit Detected!",
+                    f"Value: P{chit_value}",
+                    f"Confidence: {confidence:.0%}",
                     ""
                 )
+            else:
+                self.send_to_esp32("CHIT_UNKNOWN")
+                self.lcd.clear()
+                self.lcd.display_message("Detection Failed", "No valid chit", "detected", "")
+                
+        except Exception as e:
+            print(f"[ERROR] Detection failed: {e}")
+            self.send_to_esp32(f"ERROR:Detection failed")
+            self.lcd.display_message("ERROR", "Detection failed", "", "")
+    
+    def cmd_display(self, message):
+        """Display message on LCD"""
+        try:
+            # Parse multi-line message (lines separated by '|')
+            lines = message.split('|')
             
-            last_ir_state = ir_detected
+            self.lcd.clear()
+            for i, line in enumerate(lines[:4], start=1):
+                self.lcd.display_line(line, i)
             
-            # Check for detection results from YOLO
+            self.send_to_esp32("DISPLAY_OK")
+            
+        except Exception as e:
+            print(f"[ERROR] Display failed: {e}")
+            self.send_to_esp32(f"ERROR:Display failed")
+    
+    def cmd_dispense(self):
+        """Control servo to dispense chit"""
+        try:
+            self.lcd.display_line("Dispensing chit...", 4)
+            
+            self.servo.release_chit()
+            
+            self.send_to_esp32("DISPENSE_COMPLETE")
+            self.lcd.display_line("Dispense complete", 4)
+            
+        except Exception as e:
+            print(f"[ERROR] Dispense failed: {e}")
+            self.send_to_esp32(f"ERROR:Dispense failed")
+            self.lcd.display_line("Dispense ERROR", 4)
+    
+    def cmd_reset(self):
+        """Reset system to initial state"""
+        try:
+            self.lcd.clear()
+            self.lcd.display_message("Slave System Ready", "Waiting for ESP32", "commands...", "")
+            self.send_to_esp32("RESET_OK")
+        except Exception as e:
+            print(f"[ERROR] Reset failed: {e}")
+            self.send_to_esp32(f"ERROR:Reset failed")
+    
+    def run(self):
+        """Main run loop - listen for commands from ESP32"""
+        if not self.initialize():
+            print("[FATAL] Initialization failed. Exiting.")
+            return
+        
+        self.running = True
+        print("\n[SYSTEM] Slave controller running. Listening for ESP32 commands...")
+        print("[SYSTEM] Press Ctrl+C to shutdown\n")
+        
+        while self.running:
             try:
-                detection_result = detection_queue.get_nowait()
-                msg_type, chit_value, confidence = detection_result
+                # Read command from ESP32
+                if self.serial and self.serial.in_waiting > 0:
+                    command = self.serial.readline().decode('utf-8', errors='ignore').strip()
+                    if command:
+                        self.handle_command(command)
                 
-                if msg_type == "CHIT_DETECTED":
-                    print(f"\n{'='*60}")
-                    print(f"🎉 CHIT DETECTED: ₱{chit_value}")
-                    print(f"   Confidence: {confidence:.2%}")
-                    print(f"{'='*60}")
-                    
-                    lcd.display_lines(
-                        "DETECTED!",
-                        f"Value: P{chit_value}",
-                        f"Conf: {int(confidence*100)}%",
-                        "Releasing chit..."
-                    )
-                    
-                    # Release chit locally
-                    release_chit(pi)
-                    print(f"✅ Chit ₱{chit_value} released")
-                    
-                    # Send to ESP32 for coin dispensing
-                    print(f"\n{'='*60}")
-                    print(f"🪙 AUTO-DISPENSING TRIGGERED")
-                    print(f"{'='*60}")
-                    print(f"   Sending to ESP32: AUTO_DISPENSE:{chit_value}")
-                    
-                    send_to_esp32(esp32_serial, f"AUTO_DISPENSE:{chit_value}")
-                    
-                    lcd.display_lines(
-                        "AUTO DISPENSE!",
-                        f"Chit: P{chit_value}",
-                        "Dispensing...",
-                        "Please wait"
-                    )
-                    time.sleep(3)
-                    
-                    lcd.display_lines(
-                        "Ready - Scanning",
-                        "Waiting for chit...",
-                        "",
-                        ""
-                    )
+                # Small delay to prevent CPU overload
+                time.sleep(0.01)
                 
-                elif msg_type == "DETECTION_TIMEOUT":
-                    print(f"\n❌ Detection timeout - no valid chit")
-                    lcd.display_lines(
-                        "TIMEOUT!",
-                        "No valid chit",
-                        "detected",
-                        "Try again..."
-                    )
-                    time.sleep(2)
-                    lcd.display_lines(
-                        "Ready - Scanning",
-                        "Waiting for chit...",
-                        "",
-                        ""
-                    )
-            
-            except:
-                pass  # Queue empty
-            
-            # Check for ESP32 messages
-            esp32_msg = read_from_esp32(esp32_serial)
-            
-            time.sleep(0.05)
+            except serial.SerialException as e:
+                print(f"[ERROR] Serial error: {e}")
+                time.sleep(1)
+                
+            except Exception as e:
+                print(f"[ERROR] Unexpected error: {e}")
+                time.sleep(0.5)
     
-    except KeyboardInterrupt:
-        print("\n\nShutdown signal received")
-    
-    finally:
-        print("Cleaning up...")
-        set_servo_angle(pi, SERVO_INITIAL_ANGLE)
-        pi.set_servo_pulsewidth(SERVO_PIN, 0)
-        pi.stop()
-        GPIO.cleanup()
+    def shutdown(self):
+        """Shutdown all hardware gracefully"""
+        print("\n[SYSTEM] Shutting down...")
+        self.running = False
         
-        if esp32_serial and esp32_serial.is_open:
-            send_to_esp32(esp32_serial, "SYSTEM_SHUTDOWN")
-            esp32_serial.close()
+        try:
+            if self.lcd:
+                self.lcd.clear()
+                self.lcd.display_message("System Shutdown", "", "", "")
+        except:
+            pass
         
-        lcd.clear()
-        print("ESP32 Communication module closed.")
+        try:
+            if self.servo:
+                self.servo.cleanup()
+        except:
+            pass
+        
+        try:
+            if self.detector:
+                self.detector.release_camera()
+        except:
+            pass
+        
+        try:
+            if self.ir_sensor:
+                self.ir_sensor.cleanup()
+        except:
+            pass
+        
+        try:
+            if self.serial and self.serial.is_open:
+                self.send_to_esp32("SLAVE_SHUTDOWN")
+                self.serial.close()
+        except:
+            pass
+        
+        print("[SYSTEM] ✓ Shutdown complete")
 
+# ==================== MAIN ENTRY POINT ====================
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--esp32_port', help='Serial port for ESP32 (example: "/dev/ttyUSB0")',
-                        default='/dev/ttyUSB0')
-    args = parser.parse_args()
-    
-    print("\n⚠️  NOTE: This module should be run via start_detection_system.py")
-    print("Starting ESP32 communication in standalone mode...\n")
-    
-    # Create dummy queues for standalone testing
-    detection_queue = Queue()
-    ir_trigger_queue = Queue()
+def main():
+    """Main entry point"""
+    controller = ChitSlaveController()
     
     try:
-        run_esp32_comm_loop(detection_queue, ir_trigger_queue, args.esp32_port)
+        controller.run()
+    except KeyboardInterrupt:
+        print("\n[SYSTEM] Keyboard interrupt received")
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"\n[FATAL] Unhandled exception: {e}")
+        import traceback
+        traceback.print_exc()
+    finally:
+        controller.shutdown()
+
+if __name__ == "__main__":
+    main()
