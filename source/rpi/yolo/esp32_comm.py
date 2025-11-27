@@ -33,6 +33,7 @@ import sys
 import time
 import signal
 import serial
+import serial.tools.list_ports
 import threading
 from pathlib import Path
 
@@ -56,6 +57,40 @@ except ImportError as e:
     print("Make sure opencv-python and ultralytics are installed")
     sys.exit(1)
 
+# ==================== AUTO-DETECTION FUNCTIONS ====================
+
+def find_camera():
+    """Auto-detect USB camera"""
+    print("[AUTO-DETECT] Searching for USB camera...")
+    for i in range(10):  # Check /dev/video0 to /dev/video9
+        cap = cv2.VideoCapture(i)
+        if cap.isOpened():
+            ret, frame = cap.read()
+            cap.release()
+            if ret and frame is not None:
+                print(f"[AUTO-DETECT] ✓ Found camera at /dev/video{i}")
+                return i
+    print("[AUTO-DETECT] ✗ No camera found")
+    return None
+
+def find_esp32_port():
+    """Auto-detect ESP32 serial port"""
+    print("[AUTO-DETECT] Searching for ESP32 serial port...")
+    ports = serial.tools.list_ports.comports()
+    for port in ports:
+        # Look for common ESP32/serial identifiers
+        if 'USB' in port.device or 'ACM' in port.device or 'ttyUSB' in port.device or 'serial' in port.device:
+            try:
+                # Try to open port
+                ser = serial.Serial(port.device, 115200, timeout=1)
+                ser.close()
+                print(f"[AUTO-DETECT] ✓ Found serial port: {port.device}")
+                return port.device
+            except:
+                pass
+    print("[AUTO-DETECT] ✗ No ESP32 serial port found")
+    return None
+
 # ==================== CONFIGURATION ====================
 
 # GPIO Pins (BCM numbering)
@@ -72,12 +107,12 @@ LCD_WIDTH = 20
 LCD_ROWS = 4
 
 # Serial Configuration
-SERIAL_PORT = '/dev/serial0'
+SERIAL_PORT = '/dev/serial0'  # Default, will auto-detect if not found
 SERIAL_BAUD = 115200
 
 # YOLO Configuration
 MODEL_PATH = '/home/pi/Desktop/PROJECTS/Chits-Exchanger/source/rpi/yolo/chit_model.pt'
-CAMERA_INDEX = 0  # USB camera or Pi Camera index
+CAMERA_INDEX = 0  # Default USB camera index, will auto-detect if not found
 DETECTION_TIMEOUT = 5.0  # seconds
 CONFIDENCE_THRESHOLD = 0.6
 
@@ -262,7 +297,7 @@ class ChitDetector:
             self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
             self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
             
-            print(f"[CAMERA] Opened camera index {self.camera_index}")
+            print(f"[CAMERA] Opened USB camera index {self.camera_index}")
             return True
         except Exception as e:
             print(f"[ERROR] Failed to open camera: {e}")
@@ -285,7 +320,7 @@ class ChitDetector:
         frames_analyzed = 0
         while (time.time() - start_time) < timeout:
             ret, frame = self.cap.read()
-            if not ret:
+            if not ret or frame is None:
                 print("[WARN] Failed to read frame")
                 continue
             
@@ -389,7 +424,20 @@ class ChitSlaveController:
             
             # Initialize YOLO Detector
             print("[YOLO] Initializing...")
-            self.detector = ChitDetector()
+            
+            # Auto-detect camera if default doesn't work
+            camera_index = CAMERA_INDEX
+            test_cap = cv2.VideoCapture(camera_index)
+            if not test_cap.isOpened():
+                print(f"[CAMERA] Default camera {camera_index} not available, auto-detecting...")
+                detected_camera = find_camera()
+                if detected_camera is not None:
+                    camera_index = detected_camera
+                else:
+                    raise RuntimeError("No camera detected")
+            test_cap.release()
+            
+            self.detector = ChitDetector(camera_index=camera_index)
             if not self.detector.load_model():
                 raise RuntimeError("Failed to load YOLO model")
             print("[YOLO] ✓ Model loaded")
@@ -401,14 +449,32 @@ class ChitSlaveController:
             
             # Initialize Serial Communication
             print("[SERIAL] Initializing...")
-            self.serial = serial.Serial(
-                port=SERIAL_PORT,
-                baudrate=SERIAL_BAUD,
-                timeout=1.0,
-                write_timeout=1.0
-            )
+            
+            # Try default port first
+            serial_port = SERIAL_PORT
+            try:
+                self.serial = serial.Serial(
+                    port=serial_port,
+                    baudrate=SERIAL_BAUD,
+                    timeout=1.0,
+                    write_timeout=1.0
+                )
+            except (serial.SerialException, FileNotFoundError):
+                # Auto-detect if default port fails
+                print(f"[SERIAL] Default port {serial_port} not available, auto-detecting...")
+                detected_port = find_esp32_port()
+                if detected_port is None:
+                    raise RuntimeError("No ESP32 serial port detected")
+                serial_port = detected_port
+                self.serial = serial.Serial(
+                    port=serial_port,
+                    baudrate=SERIAL_BAUD,
+                    timeout=1.0,
+                    write_timeout=1.0
+                )
+            
             time.sleep(2)  # Wait for serial to stabilize
-            print(f"[SERIAL] ✓ Connected on {SERIAL_PORT} @ {SERIAL_BAUD} baud")
+            print(f"[SERIAL] ✓ Connected on {serial_port} @ {SERIAL_BAUD} baud")
             
             # Display ready status
             self.lcd.clear()
