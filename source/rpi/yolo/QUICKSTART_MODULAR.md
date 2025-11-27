@@ -23,9 +23,14 @@ sudo pigpiod
 
 ### 2. About NCNN Models
 
-**NCNN is 2-3x faster than PyTorch on Raspberry Pi!**
+**NCNN can be 2-3x faster than PyTorch on Raspberry Pi, BUT may have stability issues!**
 
-NCNN is optimized for ARM CPUs (like Raspberry Pi) and uses less memory. Your workspace already has NCNN models:
+⚠️ **IMPORTANT**: NCNN models can cause segmentation faults on some systems. If you experience crashes:
+- Use PyTorch model instead: `--model yolo11n.pt`
+- PyTorch is slower but much more stable
+- Performance difference on Pi 4: ~20-25 FPS (PyTorch) vs ~30-35 FPS (NCNN)
+
+NCNN is optimized for ARM CPUs (like Raspberry Pi) and uses less memory. Your workspace has NCNN models:
 - `chit_model_ncnn_model/` - Your custom chit detection model (NCNN format)
 - `my_model_ncnn_model/` - Alternative model
 - `yolo11n_ncnn_model/` - YOLO11n base model
@@ -35,7 +40,7 @@ NCNN is optimized for ARM CPUs (like Raspberry Pi) and uses less memory. Your wo
 # If you need to convert a .pt model to NCNN
 from ultralytics import YOLO
 model = YOLO('your_model.pt')
-model.export(format='ncnn')  # Creates your_model_ncnn_model/
+model.export(format='ncnn', imgsz=256)  # Creates your_model_ncnn_model/
 ```
 
 ### 3. Basic Usage
@@ -43,32 +48,31 @@ model.export(format='ncnn')  # Creates your_model_ncnn_model/
 ```bash
 cd /home/pi/Chits-Exchanger/source/rpi/yolo
 
-# Run with default settings (PyTorch model)
+# RECOMMENDED: PyTorch model (most stable)
 python start_detection_system.py --model yolo11n.pt --esp32_port /dev/ttyUSB0
 
-# Run with NCNN model (MUCH FASTER on Raspberry Pi!)
+# Try NCNN if you want maximum speed (may cause segfaults)
 python start_detection_system.py --model chit_model_ncnn_model --esp32_port /dev/ttyUSB0
 ```
 
 ### 4. Recommended Settings for Raspberry Pi
 
 ```bash
-# BEST: NCNN model (2-3x faster on Raspberry Pi ARM CPU)
+# RECOMMENDED: PyTorch model (stable, good performance)
 python start_detection_system.py \
-  --model chit_model_ncnn_model \
-  --inference-size 320 \
+  --model yolo11n.pt \
+  --inference-size 256 \
   --confirmation-frames 3 \
   --camera 0 \
   --esp32_port /dev/ttyUSB0
 
-# Alternative: PyTorch model
+# Advanced: NCNN model (faster but may crash)
 python start_detection_system.py \
-  --model yolo11n.pt \
-  --inference-size 320 \
+  --model chit_model_ncnn_model \
+  --inference-size 256 \
   --confirmation-frames 3 \
   --camera 0 \
-  --esp32_port /dev/ttyUSB0 \
-  --display
+  --esp32_port /dev/ttyUSB0
 ```
 
 ### 5. Maximum Speed (NCNN + 256x256)
@@ -87,8 +91,8 @@ python start_detection_system.py \
 
 | Argument | Description | Default | Recommended |
 |----------|-------------|---------|-------------|
-| `--model` | YOLO model path/dir | (required) | `chit_model_ncnn_model` (NCNN) or `yolo11n.pt` |
-| `--inference-size` | YOLO input size | 320 | 256-320 for Pi |
+| `--model` | YOLO model path/dir | (required) | `yolo11n.pt` (stable) or `chit_model_ncnn_model` (faster, risky) |
+| `--inference-size` | YOLO input size | 256 | 224-320 for Pi |
 | `--confirmation-frames` | Frames to confirm | 3 | 3-5 |
 | `--thresh` | Confidence threshold | 0.5 | 0.5 |
 | `--camera` | USB camera ID | 0 | 0 |
@@ -122,6 +126,45 @@ python esp32_comm.py --esp32_port /dev/ttyUSB0
 ```
 
 ## Troubleshooting
+
+### NCNN Segmentation Fault or NMS Timeout
+
+**Problem:** `Segmentation fault` or `NMS time limit exceeded` with NCNN model
+
+**Solutions:**
+
+1. **Use PyTorch model instead (recommended)**
+```bash
+python start_detection_system.py \
+  --model yolo11n.pt \
+  --inference-size 256 \
+  --camera 0 \
+  --esp32_port /dev/ttyUSB0
+```
+
+2. **Update ultralytics**
+```bash
+pip install --upgrade ultralytics
+```
+
+3. **Rebuild NCNN model**
+```bash
+from ultralytics import YOLO
+model = YOLO('chit_model.pt')  # Your original trained model
+model.export(format='ncnn', imgsz=256)  # Export with smaller size
+```
+
+4. **Fix Qt warnings** (if getting Qt plugin errors)
+```bash
+export QT_QPA_PLATFORM=offscreen
+python start_detection_system.py --model yolo11n.pt --esp32_port /dev/ttyUSB0
+```
+
+5. **Check NCNN installation**
+```bash
+pip uninstall ncnn
+pip install ncnn-python
+```
 
 ### "pigpio daemon not running"
 ```bash

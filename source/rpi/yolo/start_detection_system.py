@@ -53,8 +53,8 @@ def main():
                         default=0.5, type=float)
     parser.add_argument('--resolution', help='Display resolution in WxH (example: "640x480")',
                         default=None)
-    parser.add_argument('--inference-size', help='YOLO inference size (default: 320)',
-                        default=320, type=int)
+    parser.add_argument('--inference-size', help='YOLO inference size (default: 256)',
+                        default=256, type=int)
     parser.add_argument('--display', help='Show real-time detection window',
                         action='store_true')
     parser.add_argument('--camera', help='USB camera device ID (default: 0)',

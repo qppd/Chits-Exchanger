@@ -9,6 +9,10 @@ Optimized YOLO Detection Module
 import os
 import sys
 import time
+
+# Fix Qt plugin issues on headless systems
+os.environ['QT_QPA_PLATFORM'] = 'offscreen'
+
 import cv2
 import numpy as np
 from ultralytics import YOLO
@@ -143,11 +147,39 @@ def run_detection_loop(detection_queue, ir_trigger_queue, config):
         print("   Format: TorchScript")
     
     model_load_start = time.time()
-    model = YOLO(model_path, task='detect')
-    labels = model.names
-    model_load_time = time.time() - model_load_start
-    print(f"✅ Model loaded in {model_load_time:.2f}s")
-    print(f"   Classes: {list(labels.values())}\n")
+    
+    try:
+        model = YOLO(model_path, task='detect')
+        labels = model.names
+        
+        # Configure NMS settings to prevent timeout
+        if hasattr(model, 'overrides'):
+            model.overrides['nms_time_limit'] = 10.0  # Increase from 2.05s to 10s
+            model.overrides['agnostic_nms'] = True
+        
+        model_load_time = time.time() - model_load_start
+        print(f"✅ Model loaded in {model_load_time:.2f}s")
+        print(f"   Classes: {list(labels.values())}")
+        
+        if is_ncnn:
+            print("   ⚠️  NCNN models can be unstable on some systems")
+            print("   If you get segfaults, try: --model yolo11n.pt")
+        
+        print()
+        
+    except Exception as e:
+        print(f"\n❌ ERROR loading model: {e}")
+        
+        if is_ncnn:
+            print("\n⚠️  NCNN model failed to load!")
+            print("   This can happen due to:")
+            print("   1. Incompatible NCNN version")
+            print("   2. Missing NCNN dependencies")
+            print("   3. Corrupted model files")
+            print("\n💡 SOLUTION: Use PyTorch model instead:")
+            print(f"   python start_detection_system.py --model yolo11n.pt --esp32_port /dev/ttyUSB0")
+        
+        raise
     
     # Initialize USB webcam
     cap = cv2.VideoCapture(img_source)
