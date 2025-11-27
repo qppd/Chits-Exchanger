@@ -452,12 +452,13 @@ def set_servo_angle(angle):
 
 def release_chit():
     """Release chit by moving servo to release position and back"""
-    print(f"Releasing chit: Moving servo from {SERVO_INITIAL_ANGLE}Â° to {SERVO_RELEASE_ANGLE}Â°")
+    print(f"Releasing chit: Moving servo from {SERVO_INITIAL_ANGLE}° to {SERVO_RELEASE_ANGLE}°")
     set_servo_angle(SERVO_RELEASE_ANGLE)
     time.sleep(2)  # Hold for 2 seconds
-    print(f"Returning servo to initial position {SERVO_INITIAL_ANGLE}Â°")
+    print(f"Returning servo to initial position {SERVO_INITIAL_ANGLE}°")
     set_servo_angle(SERVO_INITIAL_ANGLE)
 
+def is_ir_detected():
     """Check if IR sensor detects a chit"""
     return not GPIO.input(IR_SENSOR_PIN)  # Active LOW
 
