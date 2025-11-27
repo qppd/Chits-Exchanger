@@ -208,7 +208,11 @@ while True:
     
     # Display detection results
     cv2.putText(frame, f'Number of objects: {object_count}', (10,40), cv2.FONT_HERSHEY_SIMPLEX, .7, (0,255,255), 2) # Draw total number of detected objects
-    cv2.imshow('YOLO detection results',frame) # Display image
+    
+    # Resize frame to 320x240 for display window (easier to see on small screens)
+    display_frame = cv2.resize(frame, (320, 240))
+    cv2.imshow('YOLO detection results (320x240)', display_frame) # Display image at 320x240
+    
     if record: recorder.write(frame)
 
     # If inferencing on individual images, wait for user keypress before moving to next image. Otherwise, wait 5ms before moving to next frame.
