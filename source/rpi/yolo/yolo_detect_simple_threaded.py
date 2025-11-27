@@ -21,8 +21,6 @@ parser.add_argument('--thresh', help='Minimum confidence threshold for displayin
 parser.add_argument('--resolution', help='Resolution in WxH to display inference results at (example: "640x480"), \
                     otherwise, match source resolution',
                     default=None)
-parser.add_argument('--record', help='Record results from video or webcam and save it as "demo1.avi". Must specify --resolution argument to record.',
-                    action='store_true')
 
 args = parser.parse_args()
 
@@ -32,7 +30,6 @@ model_path = args.model
 img_source = args.source
 min_thresh = args.thresh
 user_res = args.resolution
-record = args.record
 
 # Check if model file exists and is valid
 if (not os.path.exists(model_path)):
@@ -73,20 +70,6 @@ resize = False
 if user_res:
     resize = True
     resW, resH = int(user_res.split('x')[0]), int(user_res.split('x')[1])
-
-# Check if recording is valid and set up recording
-if record:
-    if source_type not in ['video','usb']:
-        print('Recording only works for video and camera sources. Please try again.')
-        sys.exit(0)
-    if not user_res:
-        print('Please specify resolution to record video at.')
-        sys.exit(0)
-    
-    # Set up recording
-    record_name = 'demo1.avi'
-    record_fps = 30
-    recorder = cv2.VideoWriter(record_name, cv2.VideoWriter_fourcc(*'MJPG'), record_fps, (resW,resH))
 
 # Load or initialize image source
 if source_type == 'image':
@@ -212,8 +195,6 @@ while True:
     # Resize frame to 320x240 for display window (easier to see on small screens)
     display_frame = cv2.resize(frame, (320, 240))
     cv2.imshow('YOLO detection results (320x240)', display_frame) # Display image at 320x240
-    
-    if record: recorder.write(frame)
 
     # If inferencing on individual images, wait for user keypress before moving to next image. Otherwise, wait 5ms before moving to next frame.
     if source_type == 'image' or source_type == 'folder':
@@ -249,5 +230,4 @@ if source_type == 'video' or source_type == 'usb':
     cap.release()
 elif source_type == 'picamera':
     cap.stop()
-if record: recorder.release()
 cv2.destroyAllWindows()
