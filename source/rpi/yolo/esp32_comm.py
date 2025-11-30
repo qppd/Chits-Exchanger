@@ -116,7 +116,7 @@ SERIAL_BAUD = 115200
 MODEL_PATH = '/home/pi/Desktop/PROJECTS/Chits-Exchanger/source/rpi/yolo/chit_model.pt'
 CAMERA_INDEX = 0  # Default USB camera index, will auto-detect if not found
 DETECTION_TIMEOUT = 5.0  # seconds
-CONFIDENCE_THRESHOLD = 0.6
+CONFIDENCE_THRESHOLD = 0.7
 
 # ==================== LCD CLASS ====================
 
