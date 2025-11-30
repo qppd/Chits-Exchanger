@@ -30,3 +30,7 @@ source/rpi/tflite/venv_tflite/
 *.bin
 *.param
 runs/
+
+# 3D Model and Print Files
+*.stl
+*.gcode

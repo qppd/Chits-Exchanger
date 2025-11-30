@@ -800,40 +800,16 @@ class ESP32Bridge:
 
 ---
 
+
 ## 🖨️ 3D Models & Manufacturing
 
-### Available Models
+**Note:** STL and GCODE files for 3D printing are no longer included in this repository. To download these files, please visit our official page on Thingiverse or other supported platforms. Some downloads may require payment or account registration, depending on the platform's policy.
 
-#### Fusion 360 Source Files (.f3d)
-- `TB74.f3d` - Bill acceptor reference
-- `ALLAN_COINSLOT.f3d` - Coin slot reference
-- `QPPD4 v29.f3d` - Complete system design
+Links to the 3D models will be provided here once available:
+- [Thingiverse Project Page](#) <!-- Update with actual link -->
+- [Other Platform](#) <!-- Update with actual link -->
 
-#### STL Files (Universal 3D Printing)
-- `Chit_Acceptor_Front.stl`
-- `Chit_Acceptor_Hand.stl`
-- `Chit_Acceptor_Servo_Mount.stl`
-- `Chit_Dispenser_Servo_Mount.stl`
-- `Chit_Dispenser_Servo_Roller.stl`
-- `Chit_Camera_Mount.stl`
-- `Chit_Acceptor_Wall_Guide.stl`
-
-#### G-code Files (Creality Ender 3 V3 SE)
-- `CE3V3SE_Chit_Acceptor_Front.gcode`
-- `CE3V3SE_Chit_Dispenser_Servo_Mount.gcode`
-- `CE3V3SE_Chit_Dispenser_Servo_Roller.gcode`
-- `CE3V3SE_ESP32-CAM_-_ESP32-CAM-MB_Case.gcode`
-
-### Printing Guidelines
-
-```
-Layer Height: 0.2mm
-Nozzle Temp: 210°C (PLA), 230°C (PETG)
-Bed Temp: 60°C (PLA), 80°C (PETG)
-Print Speed: 50-60 mm/s
-Infill: 20% (structural), 100% (critical parts)
-Support: Yes, for overhangs
-```
+If you need the STL or GCODE files for manufacturing, please check the above links or contact the project maintainers for access.
 
 ---
 
