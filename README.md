@@ -805,9 +805,9 @@ class ESP32Bridge:
 
 **Note:** STL and GCODE files for 3D printing are no longer included in this repository. To download these files, please visit our official page on Thingiverse or other supported platforms. Some downloads may require payment or account registration, depending on the platform's policy.
 
-Links to the 3D models will be provided here once available:
-- [Thingiverse Project Page](#) <!-- Update with actual link -->
-- [Other Platform](#) <!-- Update with actual link -->
+
+Links to the 3D models:
+- [Thingiverse Project Page](https://www.thingiverse.com/thing:7217170)
 
 If you need the STL or GCODE files for manufacturing, please check the above links or contact the project maintainers for access.
 
