@@ -507,8 +507,6 @@ void handleComplete() {
   lcd.setCursor(0, 1);
   lcd.print("Waiting for chit...");
   
-  displayOnRPiLCD("Ready", "Waiting for chit", "", "");
-  
   currentState = STATE_IDLE;
 }
 

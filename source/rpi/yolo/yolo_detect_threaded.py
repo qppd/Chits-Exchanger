@@ -698,11 +698,7 @@ while True:
         # Show real-time view
         if use_gui:
             cv2.imshow('Chit Detection - Real-time', display_frame)
-            key = cv2.waitKey(1) & 0xFF
-            if key == ord('q'):
-                print("\nQuitting...")
-                running = False
-                break
+            cv2.waitKey(1)
         
         # Check if IR sensor triggered
         if ir_detected and not last_ir_state and detection_enabled:
@@ -746,11 +742,7 @@ while True:
         # Show real-time view
         if use_gui:
             cv2.imshow('Chit Detection - Real-time', display_frame)
-            key = cv2.waitKey(1) & 0xFF
-            if key == ord('q'):
-                print("\nQuitting...")
-                running = False
-                break
+            cv2.waitKey(1)
         
         # Add best detection from this frame to buffer
         if detected_chits:
