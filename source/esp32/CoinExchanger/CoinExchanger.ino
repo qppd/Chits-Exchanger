@@ -85,7 +85,7 @@ struct DispensePlan {
 DispensePlan currentPlan = {0, 0, 0, 0, 0, 0};
 int dispensedCoins = 0;
 
-// Commands RECEIVED from RPi master
+// Commands RECEIVED from RPi
 const String CMD_IR_DETECTED = "IR_DETECTED";
 const String CMD_CHIT_DETECTED = "CHIT_DETECTED";  // CHIT_DETECTED:value
 const String CMD_AUTO_DISPENSE = "AUTO_DISPENSE";  // AUTO_DISPENSE:value
@@ -94,8 +94,8 @@ const String CMD_DETECTION_TIMEOUT = "DETECTION_TIMEOUT";
 const String CMD_DISPENSING_COMPLETE = "DISPENSING_COMPLETE";
 const String CMD_SYSTEM_SHUTDOWN = "SYSTEM_SHUTDOWN";
 
-// Responses SENT to RPi master
-const String RESP_SLAVE_READY = "SLAVE_READY";
+// Responses SENT to RPi
+const String RESP_READY = "ESP32_READY";
 const String RESP_DISPENSING_COMPLETE = "DISPENSING_COMPLETE";
 const String RESP_ERROR = "ERROR:";
 
@@ -193,15 +193,15 @@ void setup() {
   Serial.println("  help              - Show all commands");
   Serial.println("====================\n");
   
-  // Announce slave ready
-  Serial.println("\n✅ ESP32 Coin Exchanger ready as SLAVE");
-  Serial.println(RESP_SLAVE_READY);
+  // Announce system ready
+  Serial.println("\n✅ ESP32 Coin Exchanger System Ready");
+  Serial.println(RESP_READY);
   lcd.setCursor(0, 2);
-  lcd.print("Slave Mode Ready");
+  lcd.print("System Ready");
   delay(1000);
 }
 
-// ========== RPi MASTER COMMUNICATION FUNCTIONS ==========
+// ========== RPi COMMUNICATION FUNCTIONS ==========
 
 void sendToRPi(String message) {
   Serial.println(message);
@@ -222,7 +222,7 @@ void loop() {
   // Handle state machine
   switch (currentState) {
     case STATE_IDLE:
-      // Waiting for commands from RPi master
+      // Waiting for commands from RPi
       break;
       
     case STATE_CHIT_DETECTED:
@@ -489,7 +489,7 @@ void handleComplete() {
   
   Serial.println("✅ Transaction complete!");
   
-  // Send completion message to RPi master
+  // Send completion message to RPi
   sendToRPi(RESP_DISPENSING_COMPLETE);
   
   delay(3000);
@@ -685,14 +685,14 @@ bool handleTestCommand(String command) {
   return false;
 }
 
-// RPi Master Communication - Handle incoming commands
+// RPi Communication - Handle incoming commands
 void handleRPiCommand(String command) {
   command.trim();
   
   // Mark RPi as connected when we receive any command
   if (!rpiConnected) {
     rpiConnected = true;
-    Serial.println("✅ RPi master connected");
+    Serial.println("✅ RPi connected");
   }
   
   // Handle AUTO_DISPENSE:value - Automatic dispensing trigger
@@ -843,7 +843,7 @@ void handleRPiCommand(String command) {
     lcd.setCursor(0, 0);
     lcd.print("RPi Shutdown");
     lcd.setCursor(0, 1);
-    lcd.print("Slave mode active");
+    lcd.print("Waiting...");
   }
   // Unknown command
   else {
