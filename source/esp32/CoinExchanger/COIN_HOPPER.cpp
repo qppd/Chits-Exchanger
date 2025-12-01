@@ -370,6 +370,10 @@ bool COIN_HOPPER::dispenseCoins(int numberOfCoins) {
     
     unsigned long actualDispensed = pulseCount - initialCount;
     
+    // Add small delay before turning off motor to ensure last coin drops
+    Serial.println("⏱️  Waiting 200ms for last coin to drop...");
+    delay(200);
+    
     // Turn OFF motor after all coins dispensed
     Serial.println("🔴 Motor OFF");
     disableSSR();
