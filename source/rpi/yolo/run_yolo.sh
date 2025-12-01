@@ -1,9 +1,14 @@
 #!/bin/bash
+
+echo "Starting pigpiod..."
+sudo pigpiod
+
 echo "Activating virtual environment..."
 source /home/admin/Chits-Exchanger/source/rpi/yolo/venv/bin/activate
 
 echo "Running YOLO detection with auto-detection..."
-python3 /home/admin/Chits-Exchanger/source/rpi/yolo/yolo_detect.py \
+
+python3 /home/admin/Chits-Exchanger/source/rpi/yolo/yolo_detect_threaded.py \
   --model=/home/admin/Chits-Exchanger/source/rpi/yolo/chit_model_ncnn_model \
   --resolution=640x480
 
