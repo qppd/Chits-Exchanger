@@ -85,36 +85,19 @@ struct DispensePlan {
 DispensePlan currentPlan = {0, 0, 0, 0, 0, 0};
 int dispensedCoins = 0;
 
-// RPi communication commands - Commands we SEND to RPi
-const String CMD_CHECK_IR = "CHECK_IR";
-const String CMD_DETECT_CHIT = "DETECT_CHIT";
-const String CMD_DISPLAY = "DISPLAY:";
-const String CMD_DISPENSE_CHIT = "DISPENSE_CHIT";
-const String CMD_PING = "PING";
-const String CMD_RESET = "RESET";
-
-// RPi responses - Responses we RECEIVE from RPi
-const String RESP_SLAVE_READY = "SLAVE_READY";
-const String RESP_IR_DETECTED = "IR_DETECTED";
-const String RESP_IR_CLEAR = "IR_CLEAR";
-const String RESP_CHIT_5 = "CHIT_5";
-const String RESP_CHIT_10 = "CHIT_10";
-const String RESP_CHIT_20 = "CHIT_20";
-const String RESP_CHIT_50 = "CHIT_50";
-const String RESP_CHIT_UNKNOWN = "CHIT_UNKNOWN";
-const String RESP_DISPENSE_COMPLETE = "DISPENSE_COMPLETE";
-const String RESP_DISPLAY_OK = "DISPLAY_OK";
-const String RESP_PONG = "PONG";
-const String RESP_RESET_OK = "RESET_OK";
-const String RESP_ERROR = "ERROR:";
-const String RESP_SLAVE_SHUTDOWN = "SLAVE_SHUTDOWN";
-
-// Legacy commands for backward compatibility
+// Commands RECEIVED from RPi master
 const String CMD_IR_DETECTED = "IR_DETECTED";
-const String CMD_CHIT_DETECTED = "CHIT_DETECTED";
+const String CMD_CHIT_DETECTED = "CHIT_DETECTED";  // CHIT_DETECTED:value
+const String CMD_AUTO_DISPENSE = "AUTO_DISPENSE";  // AUTO_DISPENSE:value
 const String CMD_CHIT_RELEASED = "CHIT_RELEASED";
 const String CMD_DETECTION_TIMEOUT = "DETECTION_TIMEOUT";
+const String CMD_DISPENSING_COMPLETE = "DISPENSING_COMPLETE";
 const String CMD_SYSTEM_SHUTDOWN = "SYSTEM_SHUTDOWN";
+
+// Responses SENT to RPi master
+const String RESP_SLAVE_READY = "SLAVE_READY";
+const String RESP_DISPENSING_COMPLETE = "DISPENSING_COMPLETE";
+const String RESP_ERROR = "ERROR:";
 
 // Testing commands for Serial monitor
 const String CMD_TEST_PULSE = "test_pulse";
@@ -131,11 +114,7 @@ volatile unsigned long lastButtonTime = 0;
 const unsigned long DEBOUNCE_DELAY = 200;  // 200ms debounce
 
 // RPi communication state
-bool rpiSlaveReady = false;
-String rpiResponseBuffer = "";
-unsigned long lastRPiCommandTime = 0;
-unsigned long lastIRCheckTime = 0;
-const unsigned long IR_CHECK_INTERVAL = 2000;  // Check IR every 2 seconds
+bool rpiConnected = false;
 
 // Button ISR
 void IRAM_ATTR buttonISR() {
@@ -214,191 +193,19 @@ void setup() {
   Serial.println("  help              - Show all commands");
   Serial.println("====================\n");
   
-  // Wait for RPi slave to be ready
-  Serial.println("\n⏳ Waiting for RPi slave to initialize...");
+  // Announce slave ready
+  Serial.println("\n✅ ESP32 Coin Exchanger ready as SLAVE");
+  Serial.println(RESP_SLAVE_READY);
   lcd.setCursor(0, 2);
-  lcd.print("Waiting for RPi...");
-  
-  waitForRPiSlave();
+  lcd.print("Slave Mode Ready");
+  delay(1000);
 }
 
-// ========== RPi SLAVE COMMUNICATION FUNCTIONS ==========
+// ========== RPi MASTER COMMUNICATION FUNCTIONS ==========
 
-void waitForRPiSlave() {
-  unsigned long startWait = millis();
-  const unsigned long SLAVE_TIMEOUT = 30000;  // 30 seconds
-  
-  while (!rpiSlaveReady && (millis() - startWait < SLAVE_TIMEOUT)) {
-    if (Serial.available()) {
-      String response = Serial.readStringUntil('\n');
-      response.trim();
-      
-      if (response == RESP_SLAVE_READY) {
-        rpiSlaveReady = true;
-        Serial.println("✅ RPi slave is ready!");
-        lcd.setCursor(0, 2);
-        lcd.print("RPi: Connected!  ");
-        delay(1000);
-        return;
-      }
-    }
-    delay(100);
-  }
-  
-  if (!rpiSlaveReady) {
-    Serial.println("⚠️  RPi slave not responding. System will continue but chit detection disabled.");
-    lcd.setCursor(0, 2);
-    lcd.print("RPi: Not connected");
-    delay(2000);
-  }
-}
-
-void sendToRPi(String command) {
-  Serial.println(command);
+void sendToRPi(String message) {
+  Serial.println(message);
   Serial.flush();
-  lastRPiCommandTime = millis();
-}
-
-String waitForRPiResponse(unsigned long timeout) {
-  unsigned long startTime = millis();
-  
-  while (millis() - startTime < timeout) {
-    if (Serial.available()) {
-      String response = Serial.readStringUntil('\n');
-      response.trim();
-      
-      if (response.length() > 0) {
-        return response;
-      }
-    }
-    delay(10);
-  }
-  
-  return "TIMEOUT";
-}
-
-String sendCommandAndWait(String command, unsigned long timeout) {
-  sendToRPi(command);
-  return waitForRPiResponse(timeout);
-}
-
-void displayOnRPiLCD(String line1, String line2 = "", String line3 = "", String line4 = "") {
-  if (!rpiSlaveReady) return;
-  
-  String message = CMD_DISPLAY + line1;
-  if (line2.length() > 0) message += "|" + line2;
-  if (line3.length() > 0) message += "|" + line3;
-  if (line4.length() > 0) message += "|" + line4;
-  
-  sendToRPi(message);
-  String response = waitForRPiResponse(500);
-  
-  if (response != RESP_DISPLAY_OK && response != "TIMEOUT") {
-    Serial.print("⚠️  LCD update issue: ");
-    Serial.println(response);
-  }
-}
-
-int detectChitWithRPi() {
-  if (!rpiSlaveReady) {
-    Serial.println("⚠️  RPi slave not ready");
-    return -1;
-  }
-  
-  Serial.println("\n=== Starting Chit Detection ===");
-  
-  // Step 1: Check IR sensor
-  Serial.println("[1/3] Checking IR sensor...");
-  sendToRPi(CMD_CHECK_IR);
-  String response = waitForRPiResponse(500);
-  
-  if (response == "TIMEOUT") {
-    Serial.println("⚠️  RPi not responding to CHECK_IR");
-    return -1;
-  }
-  
-  if (response != RESP_IR_DETECTED) {
-    Serial.println("ℹ️  No chit detected by IR sensor");
-    return 0;
-  }
-  
-  Serial.println("✅ IR sensor detected chit");
-  
-  // Step 2: Display detecting message
-  Serial.println("[2/3] Updating LCD...");
-  displayOnRPiLCD("Chit Detected!", "Identifying...", "Please wait...", "");
-  
-  // Step 3: Run YOLO detection
-  Serial.println("[3/3] Running YOLO detection (~5 seconds)...");
-  sendToRPi(CMD_DETECT_CHIT);
-  response = waitForRPiResponse(10000);  // 10 second timeout
-  
-  if (response == "TIMEOUT") {
-    Serial.println("⚠️  YOLO detection timeout");
-    displayOnRPiLCD("Detection Failed", "Timeout", "Try again", "");
-    delay(2000);
-    return -1;
-  }
-  
-  // Parse chit value
-  int chitValue = 0;
-  if (response == RESP_CHIT_5) chitValue = 5;
-  else if (response == RESP_CHIT_10) chitValue = 10;
-  else if (response == RESP_CHIT_20) chitValue = 20;
-  else if (response == RESP_CHIT_50) chitValue = 50;
-  else if (response == RESP_CHIT_UNKNOWN) {
-    Serial.println("⚠️  Could not identify chit");
-    displayOnRPiLCD("Unknown Chit", "Cannot identify", "Try again", "");
-    delay(2000);
-    return -1;
-  }
-  else if (response.startsWith(RESP_ERROR)) {
-    Serial.print("⚠️  RPi error: ");
-    Serial.println(response.substring(6));
-    displayOnRPiLCD("Detection Error", "Check system", "", "");
-    delay(2000);
-    return -1;
-  }
-  else {
-    Serial.print("⚠️  Unexpected response: ");
-    Serial.println(response);
-    return -1;
-  }
-  
-  Serial.print("✅ Detected chit value: P");
-  Serial.println(chitValue);
-  Serial.println("=== Detection Complete ===");
-  
-  return chitValue;
-}
-
-void releaseChitWithRPi() {
-  if (!rpiSlaveReady) {
-    Serial.println("⚠️  RPi slave not ready - cannot release chit");
-    return;
-  }
-  
-  Serial.println("\n🎯 Commanding RPi to release chit...");
-  displayOnRPiLCD("Releasing chit...", "Please wait", "", "");
-  
-  sendToRPi(CMD_DISPENSE_CHIT);
-  String response = waitForRPiResponse(3000);
-  
-  if (response == RESP_DISPENSE_COMPLETE) {
-    Serial.println("✅ Chit released successfully");
-  } else if (response == "TIMEOUT") {
-    Serial.println("⚠️  Chit release timeout");
-  } else {
-    Serial.print("⚠️  Chit release issue: ");
-    Serial.println(response);
-  }
-}
-
-void resetRPiSlave() {
-  if (!rpiSlaveReady) return;
-  
-  sendToRPi(CMD_RESET);
-  waitForRPiResponse(500);
 }
 
 // ========== MAIN LOOP ==========
@@ -415,17 +222,7 @@ void loop() {
   // Handle state machine
   switch (currentState) {
     case STATE_IDLE:
-      // Periodically check for chit insertion
-      if (rpiSlaveReady && (millis() - lastIRCheckTime > IR_CHECK_INTERVAL)) {
-        lastIRCheckTime = millis();
-        
-        // Non-blocking IR check
-        int chitValue = detectChitWithRPi();
-        if (chitValue > 0) {
-          detectedChitValue = chitValue;
-          currentState = STATE_CALCULATING;  // Skip denomination selection, go straight to auto-dispense
-        }
-      }
+      // Waiting for commands from RPi master
       break;
       
     case STATE_CHIT_DETECTED:
@@ -555,12 +352,6 @@ void handleCalculation() {
     lcd.print("Remainder: P");
     lcd.print(currentPlan.remainder);
   }
-  
-  // Also display on RPi LCD
-  String rpiLine1 = "Dispensing Coins";
-  String rpiLine2 = "5P:" + String(currentPlan.coins_5) + " 10P:" + String(currentPlan.coins_10);
-  String rpiLine3 = "20P:" + String(currentPlan.coins_20) + " Tot:" + String(currentPlan.totalValue);
-  displayOnRPiLCD(rpiLine1, rpiLine2, rpiLine3, "Please wait...");
   
   Serial.println("=== Dispensing Plan ===");
   Serial.print("5 PHP coins: ");
@@ -696,25 +487,12 @@ void handleComplete() {
     lcd.print("Thank you!");
   }
   
-  Serial.println("Transaction complete!");
+  Serial.println("✅ Transaction complete!");
   
-  // Display completion on RPi LCD
-  displayOnRPiLCD("Dispensing", "Complete!", "Releasing chit...", "");
-  
-  delay(1000);
-  
-  // Release chit via RPi servo
-  releaseChitWithRPi();
-  
-  delay(1000);
-  
-  // Thank you message on both LCDs
-  displayOnRPiLCD("Transaction", "Complete!", "Thank you!", "");
+  // Send completion message to RPi master
+  sendToRPi(RESP_DISPENSING_COMPLETE);
   
   delay(3000);
-  
-  // Reset RPi slave
-  resetRPiSlave();
   
   // Reset and return to idle
   detectedChitValue = 0;
@@ -907,12 +685,18 @@ bool handleTestCommand(String command) {
   return false;
 }
 
-// RPi Communication Functions
+// RPi Master Communication - Handle incoming commands
 void handleRPiCommand(String command) {
   command.trim();
   
+  // Mark RPi as connected when we receive any command
+  if (!rpiConnected) {
+    rpiConnected = true;
+    Serial.println("✅ RPi master connected");
+  }
+  
   // Handle AUTO_DISPENSE:value - Automatic dispensing trigger
-  if (command.startsWith("AUTO_DISPENSE:")) {
+  if (command.startsWith(CMD_AUTO_DISPENSE + ":")) {
     int colonIndex = command.indexOf(':');
     if (colonIndex > 0) {
       String valueStr = command.substring(colonIndex + 1);
@@ -926,6 +710,7 @@ void handleRPiCommand(String command) {
           Serial.print("Current state: ");
           Serial.println(currentState);
           Serial.println("========================================");
+          sendToRPi("ERROR:SYSTEM_BUSY");
           return;
         }
         
@@ -996,10 +781,11 @@ void handleRPiCommand(String command) {
       } else {
         Serial.print("❌ Invalid chit value: ");
         Serial.println(chitValue);
+        sendToRPi("ERROR:INVALID_VALUE");
       }
     }
   }
-  // Handle CHIT_DETECTED:value
+  // Handle CHIT_DETECTED:value - Alternative to AUTO_DISPENSE
   else if (command.startsWith(CMD_CHIT_DETECTED + ":")) {
     int colonIndex = command.indexOf(':');
     if (colonIndex > 0) {
@@ -1007,28 +793,62 @@ void handleRPiCommand(String command) {
       int chitValue = valueStr.toInt();
       
       if (chitValue == 5 || chitValue == 10 || chitValue == 20 || chitValue == 50) {
-        Serial.print("Received chit detection: P");
+        Serial.print("📨 Received chit detection: P");
         Serial.println(chitValue);
         
+        // Treat same as AUTO_DISPENSE
         detectedChitValue = chitValue;
-        currentState = STATE_CHIT_DETECTED;
+        selectedDenomination = 5;
+        currentState = STATE_CALCULATING;
       } else {
-        Serial.print("Invalid chit value: ");
+        Serial.print("❌ Invalid chit value: ");
         Serial.println(chitValue);
+        sendToRPi("ERROR:INVALID_VALUE");
       }
     }
   }
+  // Handle IR_DETECTED - Informational
   else if (command == CMD_IR_DETECTED) {
-    Serial.println("IR sensor activated");
+    Serial.println("📡 IR sensor activated on RPi");
   }
-  else if (command.startsWith(CMD_CHIT_RELEASED)) {
-    Serial.println("Chit released by RPi servo");
+  // Handle CHIT_RELEASED - Informational
+  else if (command == CMD_CHIT_RELEASED) {
+    Serial.println("📤 Chit released by RPi servo");
   }
+  // Handle DETECTION_TIMEOUT - Reset to idle
   else if (command == CMD_DETECTION_TIMEOUT) {
-    Serial.println("RPi detection timeout");
+    Serial.println("⏱️  RPi detection timeout - resetting to idle");
+    currentState = STATE_IDLE;
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Detection Timeout");
+    lcd.setCursor(0, 1);
+    lcd.print("Ready for next...");
+    delay(2000);
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Ready!");
+    lcd.setCursor(0, 1);
+    lcd.print("Waiting...");
   }
+  // Handle DISPENSING_COMPLETE - from RPi (if RPi also dispenses)
+  else if (command == CMD_DISPENSING_COMPLETE) {
+    Serial.println("✅ RPi confirms dispensing complete");
+  }
+  // Handle SYSTEM_SHUTDOWN
   else if (command == CMD_SYSTEM_SHUTDOWN) {
-    Serial.println("RPi system shutting down");
+    Serial.println("🔴 RPi system shutting down");
+    rpiConnected = false;
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("RPi Shutdown");
+    lcd.setCursor(0, 1);
+    lcd.print("Slave mode active");
+  }
+  // Unknown command
+  else {
+    Serial.print("⚠️  Unknown command from RPi: ");
+    Serial.println(command);
   }
 }
 
