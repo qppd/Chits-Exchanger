@@ -134,7 +134,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--model', help='Path to YOLO model file (example: "runs/detect/train/weights/best.pt")',
                     required=True)
 parser.add_argument('--thresh', help='Minimum confidence threshold for displaying detected objects (example: "0.4")',
-                    default=0.5)
+                    default=0.7)
 parser.add_argument('--resolution', help='Resolution in WxH to display inference results at (example: "640x480"), \
                     otherwise, match source resolution',
                     default=None)
@@ -741,13 +741,13 @@ while True:
             "Releasing chit..."
         )
         
-        # Send detection result to ESP32
-        send_to_esp32(f"CHIT_DETECTED:{confirmed_chit_value}")
-        
         # Release the chit
-        print(f"ðŸ”“ Releasing chit via servo...")
+        print(f"ðŸ"" Releasing chit via servo...")
         release_chit()
         print(f"âœ… Chit â‚±{confirmed_chit_value} released successfully")
+        
+        # Inform ESP32 that chit was released
+        send_to_esp32("CHIT_RELEASED")
         
         # Auto-dispense: Send command to ESP32 to dispense detected amount
         print(f"\n{'='*60}")
