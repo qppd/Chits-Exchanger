@@ -25,7 +25,6 @@ source/rpi/tflite/venv_tflite/
 # (Allow model/TB74.png to be tracked)
 !model/TB74.png
 # Model files
-*.pt
 *.torchscript
 *.bin
 *.param
