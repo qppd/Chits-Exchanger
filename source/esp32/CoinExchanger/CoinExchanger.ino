@@ -276,7 +276,7 @@ void handleChitDetected() {
   Serial.print("Chit detected: P");
   Serial.println(detectedChitValue);
   
-  delay(2000);
+  delay(500);  // Reduced from 2000ms to 500ms
   
   // Move to denomination selection
   currentState = STATE_DENOMINATION_SELECTION;
@@ -365,7 +365,7 @@ void handleCalculation() {
   Serial.print("Remainder: P");
   Serial.println(currentPlan.remainder);
   
-  delay(3000);
+  delay(500);  // Reduced from 3000ms to 500ms for faster start
   
   // Move to dispensing
   currentState = STATE_DISPENSING;

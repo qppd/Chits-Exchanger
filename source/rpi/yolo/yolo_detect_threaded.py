@@ -498,7 +498,7 @@ def release_chit():
             servo_release_active = True
             print(f"Releasing chit: Moving servo from {SERVO_INITIAL_ANGLE}° to {SERVO_RELEASE_ANGLE}°")
             set_servo_angle(SERVO_RELEASE_ANGLE)
-            time.sleep(0.8)  # Optimized from 1.5s to 0.8s for faster release
+            time.sleep(0.5)  # Optimized from 0.8s to 0.5s for faster release
             print(f"Returning servo to initial position {SERVO_INITIAL_ANGLE}°")
             set_servo_angle(SERVO_INITIAL_ANGLE)
         finally:
@@ -810,7 +810,7 @@ while True:
                 "detected",
                 "Try again..."
             )
-            time.sleep(1)  # Reduced from 2s to 1s for faster recovery
+            time.sleep(0.5)  # Reduced from 1s to 0.5s for faster recovery
             
             lcd.display_lines(
                 "Ready - Scanning",
@@ -967,7 +967,7 @@ while True:
                 "Thank you!",
                 ""
             )
-            time.sleep(1)  # Reduced from 2s to 1s
+            time.sleep(0.5)  # Reduced from 1s to 0.5s for faster turnaround
             
             print("Waiting for next chit...\n")
             
@@ -988,7 +988,7 @@ while True:
     last_ir_state = ir_detected
     
     # Small delay to prevent CPU spinning (very small for real-time)
-    time.sleep(0.01)
+    time.sleep(0.005)  # Reduced from 0.01 to 0.005 for faster loop
 
 # Clean up
 print(f'\nShutting down...')
