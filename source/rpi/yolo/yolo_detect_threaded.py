@@ -499,7 +499,7 @@ def release_chit():
             servo_release_active = True
             print(f"Releasing chit: Moving servo from {SERVO_INITIAL_ANGLE}° to {SERVO_RELEASE_ANGLE}°")
             set_servo_angle(SERVO_RELEASE_ANGLE)
-            time.sleep(1.5)  # Reduced from 2s to 1.5s
+            time.sleep(0.8)  # Optimized from 1.5s to 0.8s for faster release
             print(f"Returning servo to initial position {SERVO_INITIAL_ANGLE}°")
             set_servo_angle(SERVO_INITIAL_ANGLE)
         finally:

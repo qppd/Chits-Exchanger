@@ -419,11 +419,10 @@ void handleDispensing() {
       int amountToDispense = coinsNeeded * denomValues[i];
       hoppers[i]->dispenseAmount(amountToDispense);
       
-      // Monitor dispensing progress
+      // Monitor dispensing progress - wait until exact coin count is reached
       unsigned long targetCount = startCount + coinsNeeded;
-      unsigned long timeout = millis() + 30000;  // 30 second timeout
       
-      while (hoppers[i]->getTotalCoins() < targetCount && millis() < timeout) {
+      while (hoppers[i]->getTotalCoins() < targetCount) {
         hoppers[i]->update();
         
         unsigned long currentCount = hoppers[i]->getTotalCoins();
@@ -434,7 +433,7 @@ void handleDispensing() {
         lcd.print(dispensed);
         lcd.print(" ");  // Clear extra chars
         
-        delay(50);
+        delay(20);  // Optimized from 50ms to 20ms for faster monitoring
       }
       
       // Turn OFF SSR relay for this hopper
@@ -458,7 +457,7 @@ void handleDispensing() {
         Serial.println("WARNING: Dispensing incomplete!");
       }
       
-      delay(500);
+      delay(100);  // Reduced from 500ms to 100ms for faster multi-hopper operations
     }
   }
   
@@ -492,7 +491,7 @@ void handleComplete() {
   // Send completion message to RPi
   sendToRPi(RESP_DISPENSING_COMPLETE);
   
-  delay(3000);
+  delay(1000);  // Reduced from 3000ms to 1000ms for faster reset
   
   // Reset and return to idle
   detectedChitValue = 0;
@@ -733,7 +732,7 @@ void handleRPiCommand(String command) {
         lcd.setCursor(0, 2);
         lcd.print("Calculating...");
         
-        delay(1000);
+        delay(200);  // Minimal delay for LCD readability
         
         // Calculate optimal coin combination
         currentPlan = calculateCoinCombination(detectedChitValue, selectedDenomination);
@@ -769,7 +768,7 @@ void handleRPiCommand(String command) {
           Serial.println(currentPlan.remainder);
         }
         
-        delay(2000);
+        delay(500);  // Reduced from 2000ms to 500ms for faster start
         
         // Start dispensing immediately
         currentState = STATE_DISPENSING;
