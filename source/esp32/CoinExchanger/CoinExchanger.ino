@@ -421,12 +421,33 @@ void handleDispensing() {
       
       // Monitor dispensing progress - wait until exact coin count is reached
       unsigned long targetCount = startCount + coinsNeeded;
+      unsigned long lastPrintTime = millis();
+      
+      Serial.print("Target count: ");
+      Serial.print(targetCount);
+      Serial.print(" (start: ");
+      Serial.print(startCount);
+      Serial.print(" + needed: ");
+      Serial.print(coinsNeeded);
+      Serial.println(")");
       
       while (hoppers[i]->getTotalCoins() < targetCount) {
         hoppers[i]->update();
         
         unsigned long currentCount = hoppers[i]->getTotalCoins();
         int dispensed = currentCount - startCount;
+        
+        // Print progress every 500ms
+        if (millis() - lastPrintTime > 500) {
+          Serial.print("Progress: ");
+          Serial.print(dispensed);
+          Serial.print("/");
+          Serial.print(coinsNeeded);
+          Serial.print(" (total count: ");
+          Serial.print(currentCount);
+          Serial.println(")");
+          lastPrintTime = millis();
+        }
         
         // Update LCD
         lcd.setCursor(7, 2);

@@ -668,7 +668,7 @@ detection_state = "WAITING"  # WAITING, DETECTING, CONFIRMED, RELEASING, DISPENS
 confirmed_chit_value = None
 confirmed_confidence = 0.0
 dispensing_start_time = 0.0
-dispensing_timeout = 30.0  # 30 second timeout for dispensing
+# No timeout - wait indefinitely for coin count completion
 
 # Begin monitoring loop with real-time detection
 print("Starting real-time detection loop...")
@@ -985,32 +985,6 @@ while True:
             detection_buffer.clear()
             confirmed_chit_value = None
             confirmed_confidence = 0.0
-        
-        # Check for timeout
-        elif elapsed_time > dispensing_timeout:
-            print(f"\n{'='*60}")
-            print(f"⚠️  DISPENSING TIMEOUT after {elapsed_time:.1f}s")
-            print(f"{'='*60}\n")
-            
-            lcd.display_lines(
-                "TIMEOUT!",
-                "Check ESP32",
-                "and hoppers",
-                ""
-            )
-            time.sleep(3)
-            
-            # Reset to WAITING on timeout
-            detection_state = "WAITING"
-            detection_buffer.clear()
-            confirmed_chit_value = None
-            confirmed_confidence = 0.0
-            lcd.display_lines(
-                "Ready - Scanning",
-                "Waiting for chit...",
-                "",
-                ""
-            )
     
     last_ir_state = ir_detected
     
