@@ -481,13 +481,34 @@ def set_servo_angle(angle):
     pulse_width = angle_to_pulse(angle)
     pi.set_servo_pulsewidth(SERVO_PIN, pulse_width)
 
+# Servo release state tracking
+servo_release_active = False
+servo_release_thread = None
+
 def release_chit():
-    """Release chit by moving servo to release position and back"""
-    print(f"Releasing chit: Moving servo from {SERVO_INITIAL_ANGLE}° to {SERVO_RELEASE_ANGLE}°")
-    set_servo_angle(SERVO_RELEASE_ANGLE)
-    time.sleep(2)  # Hold for 2 seconds
-    print(f"Returning servo to initial position {SERVO_INITIAL_ANGLE}°")
-    set_servo_angle(SERVO_INITIAL_ANGLE)
+    """Release chit by moving servo to release position and back (non-blocking)"""
+    global servo_release_active, servo_release_thread
+    
+    if servo_release_active:
+        print("⚠️ Servo release already in progress, skipping...")
+        return
+    
+    def _release_servo():
+        global servo_release_active
+        try:
+            servo_release_active = True
+            print(f"Releasing chit: Moving servo from {SERVO_INITIAL_ANGLE}° to {SERVO_RELEASE_ANGLE}°")
+            set_servo_angle(SERVO_RELEASE_ANGLE)
+            time.sleep(1.5)  # Reduced from 2s to 1.5s
+            print(f"Returning servo to initial position {SERVO_INITIAL_ANGLE}°")
+            set_servo_angle(SERVO_INITIAL_ANGLE)
+        finally:
+            servo_release_active = False
+    
+    # Run servo release in background thread to avoid blocking
+    servo_release_thread = threading.Thread(target=_release_servo, daemon=True, name="ServoRelease")
+    servo_release_thread.start()
+    print("🔄 Servo release initiated in background")
 
 def is_ir_detected():
     """Check if IR sensor detects a chit"""
@@ -643,9 +664,11 @@ if lcd.enabled:
 detection_enabled = True
 
 # State machine for detection
-detection_state = "WAITING"  # WAITING, DETECTING, CONFIRMED, DISPENSING
+detection_state = "WAITING"  # WAITING, DETECTING, CONFIRMED, RELEASING, DISPENSING
 confirmed_chit_value = None
 confirmed_confidence = 0.0
+dispensing_start_time = 0.0
+dispensing_timeout = 30.0  # 30 second timeout for dispensing
 
 # Begin monitoring loop with real-time detection
 print("Starting real-time detection loop...")
