@@ -345,7 +345,8 @@ void loop() {
     currentState = CALCULATING;
     displayMessage("Counting bills...", 0);
     char creditMsg[21];
-    snprintf(creditMsg, sizeof(creditMsg), "Pulses: %d", pulseCount);
+    int currentCredit = pulseCount * 10;
+    snprintf(creditMsg, sizeof(creditMsg), "Credit: P%d", currentCredit);
     displayMessage(creditMsg, 1);
   }
   // When counting is done, show final credit and start dispensing
