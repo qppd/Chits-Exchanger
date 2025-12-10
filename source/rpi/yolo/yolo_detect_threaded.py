@@ -401,7 +401,9 @@ def serial_communication_thread():
                     message = esp32_serial.readline().decode('utf-8', errors='ignore').strip()
                     if message:
                         serial_rx_queue.put(message)
-                        print(f"ESP32: {message}")
+                        # Filter out ESP32_READY messages to prevent terminal flooding
+                        if message != "ESP32_READY":
+                            print(f"ESP32: {message}")
                         
                         # Handle special messages
                         if "DISPENSING_COMPLETE" in message and lcd.enabled:
@@ -676,7 +678,9 @@ while True:
     # Check for messages from ESP32
     esp32_msg = read_from_esp32()
     if esp32_msg:
-        print(f"ESP32: {esp32_msg}")
+        # Filter out ESP32_READY messages to prevent terminal flooding
+        if esp32_msg != "ESP32_READY":
+            print(f"ESP32: {esp32_msg}")
     
     # Capture and process frame continuously
     ret, frame = cap.read()
