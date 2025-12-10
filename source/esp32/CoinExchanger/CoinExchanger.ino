@@ -454,7 +454,10 @@ void handleDispensing() {
         lcd.print(dispensed);
         lcd.print(" ");  // Clear extra chars
         
-        delay(20);  // Optimized from 50ms to 20ms for faster monitoring
+        // Keep serial communication alive during dispensing
+        handleSerialCommands();
+        
+        delay(10);  // Reduced from 20ms to 10ms, serial handling compensates
       }
       
       // Turn OFF SSR relay for this hopper
@@ -478,11 +481,14 @@ void handleDispensing() {
         Serial.println("WARNING: Dispensing incomplete!");
       }
       
-      delay(100);  // Reduced from 500ms to 100ms for faster multi-hopper operations
+      delay(50);  // Minimal delay between hoppers (reduced from 100ms)
     }
   }
   
   Serial.println("=== Dispensing Complete ===\n");
+  
+  // Send completion message to RPi IMMEDIATELY
+  sendToRPi(RESP_DISPENSING_COMPLETE);
   
   // Move to complete state
   currentState = STATE_COMPLETE;
@@ -509,10 +515,7 @@ void handleComplete() {
   
   Serial.println("✅ Transaction complete!");
   
-  // Send completion message to RPi
-  sendToRPi(RESP_DISPENSING_COMPLETE);
-  
-  delay(1000);  // Reduced from 3000ms to 1000ms for faster reset
+  delay(800);  // Reduced from 1000ms to 800ms for faster reset
   
   // Reset and return to idle
   detectedChitValue = 0;

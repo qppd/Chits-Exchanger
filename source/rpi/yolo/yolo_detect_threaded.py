@@ -382,11 +382,10 @@ def serial_communication_thread():
     while running:
         # Handle outgoing messages (non-blocking)
         try:
-            message = serial_tx_queue.get(timeout=0.01)
+            message = serial_tx_queue.get(timeout=0.001)  # Reduced from 0.01 to 0.001
             if esp32_serial and esp32_serial.is_open:
                 try:
-                    esp32_serial.reset_output_buffer()
-                    full_message = message + '\\n'
+                    full_message = message + '\n'
                     esp32_serial.write(full_message.encode('utf-8'))
                     esp32_serial.flush()
                     print(f"Sent to ESP32: {message}")
@@ -411,7 +410,7 @@ def serial_communication_thread():
                 if running:
                     print(f"Error reading: {e}")
         
-        time.sleep(0.01)
+        time.sleep(0.001)  # Reduced from 0.01 to 0.001 for faster communication
 
 # Start serial communication thread
 if esp32_serial:
@@ -652,7 +651,7 @@ if lcd.enabled:
         "Insert chit",
         ""
     )
-    time.sleep(2)
+    time.sleep(0.5)  # Reduced from 2s to 0.5s for faster startup
     lcd.display_lines(
         "Ready - Scanning",
         "Waiting for chit...",
@@ -811,7 +810,7 @@ while True:
                 "detected",
                 "Try again..."
             )
-            time.sleep(2)
+            time.sleep(1)  # Reduced from 2s to 1s for faster recovery
             
             lcd.display_lines(
                 "Ready - Scanning",
@@ -968,7 +967,7 @@ while True:
                 "Thank you!",
                 ""
             )
-            time.sleep(2)
+            time.sleep(1)  # Reduced from 2s to 1s
             
             print("Waiting for next chit...\n")
             
