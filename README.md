@@ -1,8 +1,6 @@
 # IoT Chits Exchanger
 
 <div align="center">
-  <img src="diagram/Peso_Bill_To_Chit.png" alt="Chits Exchanger System Architecture" width="600"/>
-
   [![GitHub release](https://img.shields.io/github/release/qppd/Chits-Exchanger.svg)](https://github.com/qppd/Chits-Exchanger/releases)
   [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
   [![ESP32](https://img.shields.io/badge/Platform-ESP32-blue.svg)](https://www.espressif.com/en/products/socs/esp32)
@@ -664,6 +662,8 @@ STATUS:<state>               # System state update
 ### Wiring Diagram Images
 
 <div align="center">
+  <img src="diagram/Peso_Bill_To_Chit.png" alt="Peso Bill to Chit Wiring Diagram" width="600"/>
+  <br><br>
   <img src="diagram/Chit_To_Peso.png" alt="Chit to Peso Wiring Diagram" width="600"/>
   <br>
   <em>Interactive diagram: <a href="https://app.cirkitdesigner.com/project/baaf10d1-3b7c-495a-b32e-2047c115f3de" target="_blank">View in Cirkit Designer</a></em>
