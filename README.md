@@ -665,6 +665,8 @@ STATUS:<state>               # System state update
 
 <div align="center">
   <img src="diagram/Chit_To_Peso.png" alt="Chit to Peso Wiring Diagram" width="600"/>
+  <br>
+  <em>Interactive diagram: <a href="https://app.cirkitdesigner.com/project/baaf10d1-3b7c-495a-b32e-2047c115f3de" target="_blank">View in Cirkit Designer</a></em>
 </div>
 
 ---
