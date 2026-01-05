@@ -16,6 +16,10 @@
 - [Quick Start](#-quick-start)
 - [Project Overview](#-project-overview)
 - [File Structure](#-file-structure)
+- [Raspberry Pi Slave System](#-raspberry-pi-slave-system)
+- [Serial Communication Protocol](#-serial-communication-protocol)
+- [Complete Testing Guide](#-complete-testing-guide)
+- [Auto-Dispense System](#-auto-dispense-system)
 - [System Architecture](#-system-architecture)
 - [Key Features](#-key-features)
 - [Hardware Requirements](#-hardware-requirements)
@@ -94,16 +98,11 @@ The **IoT Chits Exchanger** is an intelligent, dual-platform automated currency 
 
 ```
 Chits-Exchanger/
-├── README.md                           # Main project documentation
-├── QUICK_START.md                      # Quick setup guide
-├── QUICK_START_AUTO_DISPENSE.md        # Auto-dispense quick start
-├── TESTING_GUIDE.md                    # Testing procedures
-├── AUTO_DISPENSE_CHANGES.md            # Auto-dispense feature changes
-├── AUTO_DISPENSE_FLOW.md               # Auto-dispense workflow
-├── BUGFIX_AUTO_DISPENSE.md             # Bug fixes for auto-dispense
-├── ESP32_RPI_INTEGRATION_COMPLETE.md   # Integration documentation
+├── README.md                           # Complete project documentation
 ├── diagram/                            # System diagrams
-│   └── Peso_Bill_To_Chit.fzz          # Fritzing circuit diagram
+│   ├── Peso_Bill_To_Chit.png          # Peso to chit wiring diagram
+│   ├── Peso_Bill_To_Chit.fzz          # Fritzing circuit diagram
+│   └── Chit_To_Peso.png               # Chit to peso wiring diagram
 ├── ml/                                 # Machine learning models
 │   ├── my_model.pt                     # Trained YOLO model
 │   └── training/                       # Training data and results
@@ -166,8 +165,6 @@ Chits-Exchanger/
             ├── run_yolo.sh                 # Run script
             ├── start.sh                    # Startup script
             ├── install_lcd.sh              # LCD installation
-            ├── INTEGRATION_GUIDE.md        # Integration guide
-            ├── ESP32_SLAVE_README.md       # ESP32 communication docs
             ├── chit_model.pt               # Trained chit detection model
             ├── yolo11n.pt                  # YOLOv11 base model
             ├── yolo11n.torchscript         # TorchScript model
@@ -199,7 +196,891 @@ Chits-Exchanger/
 
 ---
 
-## 🏗️ System Architecture
+## 🔗 Raspberry Pi Slave System
+
+### System Architecture
+
+The Raspberry Pi acts as a slave system that receives commands from the ESP32 master controller and handles:
+
+- IR Sensor Detection - Detects when a chit is inserted
+- YOLO Chit Recognition - Identifies chit denomination (5, 10, 20, 50 pesos)
+- LCD Display - Shows status messages on 20x4 I2C LCD
+- Servo Control - Dispenses chit after coin exchange
+
+### Hardware Configuration
+
+#### GPIO Pins (BCM Numbering)
+- IR Sensor: GPIO17
+- Servo Motor: GPIO22
+  - Initial Angle: 39 degrees
+  - Release Angle: 90 degrees
+
+#### I2C LCD
+- Address: 0x27
+- Size: 20x4 characters
+
+#### Serial Connection
+- Port: /dev/serial0
+- Baud Rate: 115200
+- Connected to: ESP32 TX/RX pins
+
+### Command Protocol
+
+#### Commands Received from ESP32
+
+| Command | Description | Response |
+|---------|-------------|----------|
+| `CHECK_IR` | Check if IR sensor detects chit | `IR_DETECTED` or `IR_CLEAR` |
+| `DETECT_CHIT` | Run YOLO detection | `CHIT_5`, `CHIT_10`, `CHIT_20`, `CHIT_50`, or `CHIT_UNKNOWN` |
+| `DISPLAY:<message>` | Display message on LCD (lines separated by \|) | `DISPLAY_OK` |
+| `DISPENSE_CHIT` | Release chit via servo | `DISPENSE_COMPLETE` |
+| `PING` | Check if slave is alive | `PONG` |
+| `RESET` | Reset to initial state | `RESET_OK` |
+
+#### Responses Sent to ESP32
+
+| Response | Description |
+|----------|-------------|
+| `SLAVE_READY` | System initialized and ready |
+| `IR_DETECTED` | Chit detected by IR sensor |
+| `IR_CLEAR` | No chit detected |
+| `CHIT_5` | Detected 5 peso chit |
+| `CHIT_10` | Detected 10 peso chit |
+| `CHIT_20` | Detected 20 peso chit |
+| `CHIT_50` | Detected 50 peso chit |
+| `CHIT_UNKNOWN` | Could not identify chit |
+| `DISPENSE_COMPLETE` | Chit dispensed successfully |
+| `DISPLAY_OK` | LCD updated |
+| `ERROR:<message>` | Error occurred |
+| `SLAVE_SHUTDOWN` | System shutting down |
+
+### Raspberry Pi Slave Installation
+
+#### Prerequisites
+
+```bash
+# Update system
+sudo apt-get update
+sudo apt-get upgrade
+
+# Install pigpio daemon (for servo control)
+sudo apt-get install pigpio python3-pigpio
+sudo systemctl enable pigpiod
+sudo systemctl start pigpiod
+
+# Install Python dependencies
+pip3 install pyserial
+pip3 install RPi.GPIO
+pip3 install smbus2
+pip3 install opencv-python
+pip3 install ultralytics
+
+# Enable serial port (disable console)
+sudo raspi-config
+# Navigate to: Interface Options -> Serial Port
+# Disable login shell over serial: NO
+# Enable serial port hardware: YES
+# Reboot
+```
+
+#### Model Setup
+
+Place your trained YOLO model at:
+```
+/home/pi/Desktop/PROJECTS/Chits-Exchanger/source/rpi/yolo/chit_model.pt
+```
+
+Or update `MODEL_PATH` in `esp32_comm.py` to your model location.
+
+### Usage
+
+#### Start the Slave System
+
+```bash
+cd /home/pi/Desktop/PROJECTS/Chits-Exchanger/source/rpi/yolo
+python3 esp32_comm.py
+```
+
+#### Expected Output
+
+```
+==================================================
+ESP32 Chit Slave Controller Initializing...
+==================================================
+[LCD] Initializing...
+[LCD] ✓ Initialized
+[IR] Initializing...
+[IR] ✓ Initialized
+[SERVO] Initializing...
+[SERVO] ✓ Initialized
+[YOLO] Initializing...
+[YOLO] Loading model: /home/pi/.../chit_model.pt
+[YOLO] Model loaded successfully. Classes: {0: '5', 1: '10', 2: '20', 3: '50'}
+[YOLO] ✓ Model loaded
+[CAMERA] Opened camera index 0
+[CAMERA] ✓ Opened
+[SERIAL] Initializing...
+[SERIAL] ✓ Connected on /dev/serial0 @ 115200 baud
+
+==================================================
+✓ ALL SYSTEMS INITIALIZED
+==================================================
+
+[TX → ESP32] SLAVE_READY
+[SYSTEM] Slave controller running. Listening for ESP32 commands...
+[SYSTEM] Press Ctrl+C to shutdown
+```
+
+#### Run as Systemd Service (Auto-start on boot)
+
+Create service file:
+
+```bash
+sudo nano /etc/systemd/system/chit-slave.service
+```
+
+Add content:
+
+```ini
+[Unit]
+Description=Chit Exchanger Slave System
+After=network.target pigpiod.service
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/Desktop/PROJECTS/Chits-Exchanger/source/rpi/yolo
+ExecStart=/usr/bin/python3 /home/pi/Desktop/PROJECTS/Chits-Exchanger/source/rpi/yolo/esp32_comm.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Enable and start:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable chit-slave.service
+sudo systemctl start chit-slave.service
+
+# Check status
+sudo systemctl status chit-slave.service
+
+# View logs
+journalctl -u chit-slave.service -f
+```
+
+### Transaction Workflow Example
+
+#### Complete Transaction Flow
+
+1. **ESP32 Sends**: `CHECK_IR`
+   - **RPi Response**: `IR_DETECTED`
+
+2. **ESP32 Sends**: `DETECT_CHIT`
+   - **RPi**: Captures frames, runs YOLO
+   - **RPi Response**: `CHIT_50` (or other denomination)
+
+3. **ESP32 Sends**: `DISPLAY:Chit Detected!|Value: P50|Calculating...|`
+   - **RPi**: Updates LCD
+   - **RPi Response**: `DISPLAY_OK`
+
+4. **ESP32**: Calculates coin combination, dispenses coins
+
+5. **ESP32 Sends**: `DISPLAY:Dispensing|Complete!|Releasing chit...|`
+   - **RPi Response**: `DISPLAY_OK`
+
+6. **ESP32 Sends**: `DISPENSE_CHIT`
+   - **RPi**: Servo rotates to release chit
+   - **RPi Response**: `DISPENSE_COMPLETE`
+
+7. **ESP32 Sends**: `RESET`
+   - **RPi**: Resets to ready state
+   - **RPi Response**: `RESET_OK`
+
+### Slave System Configuration
+
+Edit constants in `esp32_comm.py`:
+
+```python
+# GPIO Pins
+IR_SENSOR_PIN = 17
+SERVO_PIN = 22
+
+# Servo Angles
+SERVO_INITIAL_ANGLE = 39
+SERVO_RELEASE_ANGLE = 90
+
+# LCD
+LCD_I2C_ADDR = 0x27
+
+# Serial
+SERIAL_PORT = '/dev/serial0'
+SERIAL_BAUD = 115200
+
+# YOLO
+MODEL_PATH = '/path/to/your/chit_model.pt'
+CAMERA_INDEX = 0
+DETECTION_TIMEOUT = 5.0
+CONFIDENCE_THRESHOLD = 0.6
+```
+
+### Troubleshooting Raspberry Pi Slave
+
+#### Serial Communication Issues
+
+```bash
+# Check if serial port is available
+ls -l /dev/serial0
+
+# Test serial connection
+sudo apt-get install minicom
+minicom -b 115200 -o -D /dev/serial0
+```
+
+#### Camera Issues
+
+```bash
+# List available cameras
+v4l2-ctl --list-devices
+
+# Test camera
+python3 -c "import cv2; cap = cv2.VideoCapture(0); print('Camera OK' if cap.isOpened() else 'Camera Failed'); cap.release()"
+```
+
+#### LCD Not Working
+
+```bash
+# Check I2C devices
+sudo i2cdetect -y 1
+
+# Should show 0x27 (or your LCD address)
+```
+
+#### Pigpio Daemon Issues
+
+```bash
+# Check if pigpiod is running
+sudo systemctl status pigpiod
+
+# Restart if needed
+sudo systemctl restart pigpiod
+```
+
+### Testing Individual Components
+
+```bash
+# Test IR Sensor
+python3 /home/pi/Desktop/PROJECTS/Chits-Exchanger/source/rpi/test/ir_sensor_tester.py
+
+# Test Servo
+python3 /home/pi/Desktop/PROJECTS/Chits-Exchanger/source/rpi/test/servo_tester.py
+
+# Test LCD
+python3 /home/pi/Desktop/PROJECTS/Chits-Exchanger/source/rpi/test/lcd_tester.py
+```
+
+---
+
+## 📡 Serial Communication Protocol
+
+### System Architecture
+
+```
+┌─────────────────────────────────────────┐
+│   Raspberry Pi (MASTER)                 │
+│   - yolo_detect.py                      │
+│   - IR Sensor monitoring                │
+│   - YOLO chit detection                 │
+│   - Servo chit dispenser                │
+│   - LCD display                         │
+└──────────────┬──────────────────────────┘
+               │
+               │ Serial (115200 baud)
+               │ /dev/ttyUSB0
+               │
+┌──────────────▼──────────────────────────┐
+│   ESP32 (SLAVE)                         │
+│   - CoinExchanger.ino                   │
+│   - 3x Coin Hoppers (5, 10, 20 PHP)     │
+│   - Coin dispensing logic               │
+│   - LCD display                         │
+└─────────────────────────────────────────┘
+```
+
+### Communication Flow
+
+#### Initialization
+
+1. **ESP32** starts up and sends:
+   - `SLAVE_READY` - Announces it's ready to receive commands
+
+2. **RPi** starts up and begins monitoring IR sensor
+
+#### Normal Operation Flow
+
+1. **RPi** monitors IR sensor continuously
+2. When chit inserted:
+   - **RPi** sends: `IR_DETECTED`
+3. **RPi** runs YOLO detection
+4. When chit identified:
+   - **RPi** sends: `CHIT_DETECTED:50` (example: 50 peso chit)
+5. **RPi** releases chit via servo
+   - **RPi** sends: `CHIT_RELEASED`
+6. **RPi** triggers auto-dispensing
+   - **RPi** sends: `AUTO_DISPENSE:50`
+7. **ESP32** calculates coin combination and dispenses
+8. When complete:
+   - **ESP32** sends: `DISPENSING_COMPLETE`
+9. **RPi** updates LCD to "Ready" state
+
+#### Error Handling
+
+- If detection times out:
+  - **RPi** sends: `DETECTION_TIMEOUT`
+  - **ESP32** resets to idle state
+
+- If ESP32 is busy:
+  - **ESP32** sends: `ERROR:SYSTEM_BUSY`
+  - **RPi** waits and retries
+
+- If invalid value received:
+  - **ESP32** sends: `ERROR:INVALID_VALUE`
+
+#### Shutdown
+
+- When shutting down:
+  - **RPi** sends: `SYSTEM_SHUTDOWN`
+  - **ESP32** acknowledges and enters standby mode
+
+### Command Reference
+
+#### Commands FROM RPi TO ESP32 (Master → Slave)
+
+| Command | Format | Description | ESP32 Action |
+|---------|--------|-------------|--------------|
+| `IR_DETECTED` | `IR_DETECTED` | IR sensor detected chit | Informational only |
+| `CHIT_DETECTED` | `CHIT_DETECTED:50` | Chit value identified | Triggers calculation and dispensing |
+| `AUTO_DISPENSE` | `AUTO_DISPENSE:50` | Auto-dispense command | Immediately dispenses coins for value |
+| `CHIT_RELEASED` | `CHIT_RELEASED` | Servo released chit | Informational only |
+| `DETECTION_TIMEOUT` | `DETECTION_TIMEOUT` | Detection failed | Resets ESP32 to idle |
+| `SYSTEM_SHUTDOWN` | `SYSTEM_SHUTDOWN` | RPi shutting down | ESP32 enters standby |
+
+#### Responses FROM ESP32 TO RPi (Slave → Master)
+
+| Response | Format | Description | When Sent |
+|----------|--------|-------------|-----------|
+| `SLAVE_READY` | `SLAVE_READY` | ESP32 is ready | At startup |
+| `DISPENSING_COMPLETE` | `DISPENSING_COMPLETE` | Coins dispensed successfully | After dispensing completes |
+| `ERROR:SYSTEM_BUSY` | `ERROR:SYSTEM_BUSY` | ESP32 busy, cannot accept command | When already dispensing |
+| `ERROR:INVALID_VALUE` | `ERROR:INVALID_VALUE` | Invalid chit value received | When value not 5/10/20/50 |
+
+### Valid Chit Values
+
+- `5` - 5 peso chit
+- `10` - 10 peso chit
+- `20` - 20 peso chit
+- `50` - 50 peso chit
+
+### Serial Port Settings
+
+- **Baud Rate**: 115200
+- **Data Bits**: 8
+- **Parity**: None
+- **Stop Bits**: 1
+- **Flow Control**: None (DTR/RTS disabled to prevent auto-reset)
+- **Terminator**: Newline (`\n`)
+
+### Example Communication Session
+
+```
+[ESP32 startup]
+ESP32 → RPi: SLAVE_READY
+
+[User inserts 50 peso chit]
+RPi → ESP32: IR_DETECTED
+[RPi runs YOLO detection for 3-5 seconds]
+RPi → ESP32: CHIT_DETECTED:50
+[RPi moves servo to release chit]
+RPi → ESP32: CHIT_RELEASED
+[RPi triggers auto-dispensing]
+RPi → ESP32: AUTO_DISPENSE:50
+
+[ESP32 calculates: 2x20PHP + 1x10PHP]
+[ESP32 dispenses coins from hoppers]
+[After ~10-15 seconds]
+ESP32 → RPi: DISPENSING_COMPLETE
+
+[System ready for next transaction]
+```
+
+### Timing Considerations
+
+- **IR Detection**: Continuous monitoring, ~10ms polling
+- **YOLO Detection**: 3-5 seconds per chit
+- **Servo Release**: 2 seconds movement
+- **Auto-Dispense**: 10-15 seconds depending on coin count
+- **Serial Timeout**: 1 second for writes, 10ms for reads (non-blocking)
+
+### Error Recovery
+
+1. **Communication timeout**: RPi continues operation, ESP32 waits
+2. **Invalid command**: ESP32 logs error, ignores command
+3. **Busy state**: ESP32 responds with ERROR, RPi waits and retries
+4. **Detection failure**: RPi sends DETECTION_TIMEOUT, both reset
+
+### Notes
+
+- **RPi is MASTER**: Initiates all operations based on sensor input
+- **ESP32 is SLAVE**: Responds to commands, executes dispensing
+- **Non-blocking**: RPi uses non-blocking serial reads for responsiveness
+- **One transaction at a time**: ESP32 rejects commands if busy
+- **Auto-dispensing**: Default behavior, no user selection required
+
+---
+
+## 🧪 Complete Testing Guide
+
+### System Overview
+
+The system consists of two main components:
+1. **RPi with YOLO Detection** (`yolo_detect.py`) - Detects chit denominations
+2. **ESP32 Coin Exchanger** (`CoinExchanger.ino`) - Dispenses coins based on detected value
+
+### Hardware Testing Configuration
+
+#### Coin Hoppers (ESP32)
+- **Hopper 1 (5 PHP coins)**
+  - Pulse Detection: GPIO4
+  - SSR Control: GPIO26
+  
+- **Hopper 2 (10 PHP coins)**
+  - Pulse Detection: GPIO18
+  - SSR Control: GPIO25
+  
+- **Hopper 3 (20 PHP coins)**
+  - Pulse Detection: GPIO19
+  - SSR Control: GPIO33
+
+#### Dispensing Logic
+
+| Chit Value | Hopper 1 (5₱) | Hopper 2 (10₱) | Hopper 3 (20₱) | Total |
+|------------|---------------|----------------|----------------|-------|
+| 5 PHP      | 1 coin        | -              | -              | 5₱    |
+| 10 PHP     | -             | 1 coin         | -              | 10₱   |
+| 20 PHP     | -             | -              | 1 coin         | 20₱   |
+| 50 PHP     | -             | 1 coin         | 2 coins        | 50₱   |
+
+### Testing Procedures
+
+#### Test 1: Individual Hopper Components
+
+Test each hopper's pulse detection and SSR relay independently.
+
+##### Test Pulse Detection
+```bash
+# Connect to ESP32 Serial Monitor (115200 baud)
+
+# Test Hopper 1 pulse reading
+test_pulse 1
+
+# Test Hopper 2 pulse reading
+test_pulse 2
+
+# Test Hopper 3 pulse reading
+test_pulse 3
+```
+
+**Expected Result:** 
+- Drop coins manually into the hopper
+- System should detect and count each coin pulse
+- Display: `✅ PULSE detected! Coin #X | Rate: X.XX coins/sec`
+
+##### Test SSR Relay Control
+```bash
+# Test Hopper 1 relay
+test_relay 1 on    # Turn ON relay (hopper motor runs)
+test_relay 1 off   # Turn OFF relay (hopper motor stops)
+
+# Test Hopper 2 relay
+test_relay 2 on
+test_relay 2 off
+
+# Test Hopper 3 relay
+test_relay 3 on
+test_relay 3 off
+```
+
+**Expected Result:**
+- ON: Hopper motor starts, LED indicator lights
+- OFF: Hopper motor stops, LED indicator off
+
+#### Test 2: Individual Hopper Dispensing
+
+Test complete dispensing cycle with pulse counting for each hopper.
+
+```bash
+# Dispense 3 coins from Hopper 1 (5 peso)
+test_hopper 1 3
+
+# Dispense 5 coins from Hopper 2 (10 peso)
+test_hopper 2 5
+
+# Dispense 2 coins from Hopper 3 (20 peso)
+test_hopper 3 2
+```
+
+**Expected Result:**
+```
+=== HOPPER DISPENSING TEST ===
+Hopper: 1
+Coin Value: 5 PHP
+Coins to Dispense: 3
+Total Amount: 15 PHP
+Pulse GPIO: 4
+SSR GPIO: 26
+==============================
+🟢 Turning ON SSR relay...
+🪙 Starting coin dispensing...
+Progress: 1/3 coins (5/15 PHP) | Rate: 2.50 coins/sec
+Progress: 2/3 coins (10/15 PHP) | Rate: 2.45 coins/sec
+Progress: 3/3 coins (15/15 PHP) | Rate: 2.48 coins/sec
+🔴 Turning OFF SSR relay...
+
+📊 TEST RESULTS:
+  Target Coins: 3
+  Dispensed Coins: 3
+  Target Amount: 15 PHP
+  Dispensed Amount: 15 PHP
+  ✅ TEST PASSED!
+```
+
+#### Test 3: Auto-Dispense Logic
+
+Simulate the full AUTO_DISPENSE flow without RPi.
+
+```bash
+# Test 5 peso dispense
+test_auto 5
+
+# Test 10 peso dispense
+test_auto 10
+
+# Test 20 peso dispense
+test_auto 20
+
+# Test 50 peso dispense (most complex - uses 2 hoppers)
+test_auto 50
+```
+
+**Expected Result for `test_auto 50`:**
+```
+========================================
+🧪 AUTO-DISPENSE TEST
+Simulating detection of P50 chit
+========================================
+
+=== Dispensing Plan ===
+5 PHP coins: 0 (0 PHP)
+10 PHP coins: 1 (10 PHP)
+20 PHP coins: 2 (40 PHP)
+Total value: P50
+======================
+
+=== Starting Dispensing ===
+Dispensing 2 x 20 PHP coins from Hopper 3
+Enabling SSR for Hopper 3 (GPIO33)
+[Coins dispensed...]
+Disabling SSR for Hopper 3
+Dispensed: 2/2 coins (40 PHP)
+
+Dispensing 1 x 10 PHP coins from Hopper 2
+Enabling SSR for Hopper 2 (GPIO25)
+[Coins dispensed...]
+Disabling SSR for Hopper 2
+Dispensed: 1/1 coins (10 PHP)
+
+=== Dispensing Complete ===
+
+Transaction complete!
+DISPENSING_COMPLETE:50
+```
+
+#### Test 4: Serial Communication
+
+Test the serial communication between RPi and ESP32.
+
+##### From RPi Terminal
+
+```bash
+# Send AUTO_DISPENSE command via serial
+echo "AUTO_DISPENSE:20" > /dev/ttyUSB0
+
+# Monitor responses
+cat /dev/ttyUSB0
+```
+
+##### From ESP32 Serial Monitor
+
+Send commands directly:
+```bash
+AUTO_DISPENSE:50
+```
+
+**Expected Flow:**
+1. ESP32 receives: `AUTO_DISPENSE:50`
+2. ESP32 displays on LCD: Auto dispensing plan
+3. ESP32 enables SSR for Hopper 3
+4. ESP32 dispenses 2x 20 peso coins
+5. ESP32 disables SSR for Hopper 3
+6. ESP32 enables SSR for Hopper 2
+7. ESP32 dispenses 1x 10 peso coin
+8. ESP32 disables SSR for Hopper 2
+9. ESP32 sends: `DISPENSING_COMPLETE:50`
+
+#### Test 5: Complete System Integration
+
+Test the full system flow from YOLO detection to coin dispensing.
+
+##### Setup
+1. Connect ESP32 to RPi via USB (typically `/dev/ttyUSB0`)
+2. Upload `CoinExchanger.ino` to ESP32
+3. Start YOLO detection on RPi:
+
+```bash
+cd /home/admin/Chits-Exchanger/source/rpi/yolo/
+python3 yolo_detect.py --model ../../ml/my_model.pt --esp32_port /dev/ttyUSB0 --camera 0
+```
+
+##### Test Procedure
+
+1. **Insert Chit into Acceptor**
+   - IR sensor detects chit presence
+   - RPi displays: "IR DETECTED! Scanning chit..."
+   - YOLO starts analyzing the chit
+
+2. **YOLO Detection Phase**
+   - Camera captures chit image
+   - YOLO identifies denomination (5, 10, 20, or 50)
+   - Confidence level calculated
+   - Best detection displayed on screen
+
+3. **Chit Release**
+   - Servo releases chit after successful detection
+   - RPi sends: `AUTO_DISPENSE:<value>`
+
+4. **ESP32 Auto-Dispensing**
+   - ESP32 receives command
+   - Calculates coin combination
+   - Displays plan on LCD
+   - Enables SSR for required hoppers
+   - Dispenses coins with pulse counting
+   - Disables SSR after dispensing
+   - Sends: `DISPENSING_COMPLETE:<value>`
+
+5. **Completion**
+   - RPi displays success message
+   - System returns to idle state
+   - Ready for next chit
+
+##### Expected Console Output (RPi)
+
+```
+============================================================
+🔍 IR SENSOR TRIGGERED - CHIT DETECTED
+============================================================
+   Starting YOLO detection...
+   Timeout: 10 seconds
+============================================================
+
+💰 Detected: ₱50 chit | Conf: 95% | Time: 2s
+
+============================================================
+🎉 DETECTION COMPLETE
+============================================================
+   Detected Value: ₱50
+   Confidence: 95%
+   Detection Time: 2.34s
+============================================================
+
+🔓 Releasing chit via servo...
+✅ Chit ₱50 released successfully
+
+============================================================
+🪙 AUTO-DISPENSING TRIGGERED
+============================================================
+   Sending to ESP32: AUTO_DISPENSE:50
+   Expected dispensing:
+     - 2 x 20 PHP coins (Hopper 3)
+     - 1 x 10 PHP coin (Hopper 2)
+============================================================
+
+✅ Sent to ESP32: AUTO_DISPENSE:50
+
+📨 ESP32: DISPENSING_COMPLETE:50
+
+Waiting for next chit...
+```
+
+##### Expected Console Output (ESP32)
+
+```
+========================================
+🎯 AUTO_DISPENSE received: P50
+========================================
+
+=== Auto Dispensing Plan ===
+5 PHP coins: 0
+10 PHP coins: 1
+20 PHP coins: 2
+Total value: P50
+======================
+
+🚀 Starting automatic coin dispensing...
+
+=== Starting Dispensing ===
+
+Dispensing 2 x 20 PHP coins from Hopper 3
+Enabling SSR for Hopper 3 (GPIO33)
+Dispensed: 2/2 coins (40 PHP)
+Disabling SSR for Hopper 3
+
+Dispensing 1 x 10 PHP coins from Hopper 2
+Enabling SSR for Hopper 2 (GPIO25)
+Dispensed: 1/1 coins (10 PHP)
+Disabling SSR for Hopper 2
+
+=== Dispensing Complete ===
+
+Transaction complete!
+DISPENSING_COMPLETE:50
+```
+
+### Common Testing Issues
+
+#### Issue: Pulse Not Detected
+
+**Symptoms:** `test_pulse` shows no pulses when coins are dropped
+
+**Solutions:**
+1. Check GPIO pin connections
+2. Verify hopper pulse sensor wiring
+3. Test with multimeter: pulse pin should go LOW when coin passes
+4. Adjust debounce timing in code if needed
+
+#### Issue: SSR Not Activating
+
+**Symptoms:** `test_relay on` doesn't turn on hopper motor
+
+**Solutions:**
+1. Check SSR power connections (3.3V, GND, GPIO)
+2. Verify SSR LED indicator
+3. Test SSR with multimeter
+4. Check hopper motor power supply (12V/24V)
+
+#### Issue: Serial Communication Failure
+
+**Symptoms:** ESP32 not receiving AUTO_DISPENSE commands
+
+**Solutions:**
+1. Check USB cable connection
+2. Verify serial port: `ls /dev/ttyUSB*`
+3. Check baud rate (must be 115200)
+4. Grant permissions: `sudo usermod -a -G dialout $USER`
+5. Close other serial monitors
+6. Restart both ESP32 and RPi
+
+#### Issue: Incorrect Coin Count
+
+**Symptoms:** Dispensed coins don't match requested amount
+
+**Solutions:**
+1. Clean coin hopper sensors
+2. Verify coins are correct denomination
+3. Check for coin jams
+4. Adjust pulse detection sensitivity
+5. Verify hopper motor speed (may be too fast/slow)
+
+#### Issue: System Busy Error
+
+**Symptoms:** ESP32 shows "SYSTEM BUSY" message
+
+**Solutions:**
+1. Wait for current operation to complete
+2. Check if hopper is jammed
+3. Reset ESP32 if stuck
+4. Check SSR state (should be OFF when idle)
+
+### Test Commands Reference
+
+#### ESP32 Serial Commands
+
+```bash
+# Testing Commands
+help                    # Show all available commands
+test_pulse 1            # Test pulse detection on hopper 1
+test_relay 1 on         # Turn on SSR for hopper 1
+test_relay 1 off        # Turn off SSR for hopper 1
+test_hopper 1 5         # Dispense 5 coins from hopper 1
+test_auto 50            # Simulate auto-dispense for 50 peso
+test_all                # Run comprehensive hardware test
+
+# Simulation Commands
+test_chit 50            # Simulate manual chit detection (with button UI)
+
+# RPi Commands (sent via serial)
+AUTO_DISPENSE:5         # Auto-dispense 5 peso
+AUTO_DISPENSE:10        # Auto-dispense 10 peso
+AUTO_DISPENSE:20        # Auto-dispense 20 peso
+AUTO_DISPENSE:50        # Auto-dispense 50 peso
+IR_DETECTED             # IR sensor triggered
+DETECTION_TIMEOUT       # Detection timeout
+```
+
+### Performance Metrics
+
+#### Target Performance
+
+- **Detection Time:** < 3 seconds
+- **Dispensing Time per Coin:** ~0.4 seconds (2.5 coins/sec)
+- **Total Transaction Time:**
+  - 5 PHP: ~5 seconds
+  - 10 PHP: ~5 seconds
+  - 20 PHP: ~5 seconds
+  - 50 PHP: ~7 seconds (3 coins)
+  
+#### Accuracy Requirements
+
+- **YOLO Detection Confidence:** > 50%
+- **Pulse Detection Accuracy:** 100% (all coins counted)
+- **SSR Reliability:** 100% (must turn on/off correctly)
+- **Serial Communication:** 100% (no dropped messages)
+
+### Maintenance
+
+#### Daily Checks
+- Test all 3 hoppers with `test_all`
+- Verify serial communication
+- Check coin levels in hoppers
+- Clean IR sensor and camera
+
+#### Weekly Checks
+- Test complete system integration
+- Verify pulse detection on all hoppers
+- Check SSR relay operation
+- Inspect wiring connections
+
+#### Monthly Checks
+- Clean coin sensors
+- Lubricate hopper mechanisms
+- Test with all denominations (5, 10, 20, 50)
+- Verify YOLO model accuracy
+
+---
+
+## 🔄 Auto-Dispense System
 
 ### Dual-Platform Overview
 
