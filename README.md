@@ -661,6 +661,12 @@ STATUS:<state>               # System state update
 └─ (GND)  → ALLAN Hopper Ground
 ```
 
+### Wiring Diagram Images
+
+<div align="center">
+  <img src="diagram/Chit_To_Peso.png" alt="Chit to Peso Wiring Diagram" width="600"/>
+</div>
+
 ---
 
 ## 🧪 Testing & Validation
