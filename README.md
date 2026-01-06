@@ -1818,6 +1818,14 @@ class ESP32Bridge:
 
 All 3D models are available in the `model/` directory with both STL and GCODE files for direct printing.
 
+#### Complete System Views
+
+<div align="center">
+  <img src="model/Chit_Exchanger_Full_View.png" alt="Full View" width="300"/>
+  <img src="model/Chit_Exchanger_Front_Full_View.png" alt="Front Full View" width="300"/>
+  <img src="model/Chit_Exchanger_Side_Full_View.png" alt="Side Full View" width="300"/>
+</div>
+
 #### Chit Acceptor Assembly
 <div align="center">
   <img src="model/Chit_Acceptor_Front.png" alt="Chit Acceptor Front View" width="300"/>
